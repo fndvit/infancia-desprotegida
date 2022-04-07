@@ -1,0 +1,10 @@
+/.vscode/
+app/node_modules/
+app/public/build/
+app/gdocs.json
+
+.DS_Store
+/videos-unprocessed/
+/maps/
+/design/
+/motion/
