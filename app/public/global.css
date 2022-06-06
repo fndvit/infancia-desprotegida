@@ -40,6 +40,11 @@ p,
 ul {
   font-family: bitter, serif;
   font-size: 1.1rem;
+  list-style-position: inside;
+}
+ul {
+  margin: 0;
+  padding: 0;
 }
 h1,
 h2,

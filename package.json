@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "svelte-canvas": "^0.7.1"
+  }
+}

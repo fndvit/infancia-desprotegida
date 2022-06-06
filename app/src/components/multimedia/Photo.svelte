@@ -6,7 +6,7 @@
 
 <img
   class='{layout}'
-  src={src}
+  src='img/{src}'
   alt={alt} />
 
 <style>

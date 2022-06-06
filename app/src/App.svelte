@@ -1,12 +1,14 @@
 <script>
-  import Intro from "./components/text/Intro.svelte";
+  import Intro from "./components/multimedia/Intro.svelte";
   import Text from "./components/text/Text.svelte";
   import Chapter from "./components/text/Chapter.svelte";
   import ChapterVideo from "./components/multimedia/ChapterVideo.svelte";
   import InterviewVideo from "./components/multimedia/InterviewVideo.svelte";
   import Notes from "./components/text/Notes.svelte";
   import Quote from "./components/text/Quote.svelte";
-  import SpriralViolence from "./components/SpiralViolence.svelte";
+  import SpiralViolence from "./components/SpiralViolence.svelte";
+  import Network from "./components/charts/Network.svelte";
+  import Credits from "./components/text/Credits.svelte";
 
   export let content, meta;
 
@@ -32,7 +34,9 @@
     "chapter-video": ChapterVideo,
     notes: Notes,
     quote: Quote,
-    "spiral-violence": SpriralViolence,
+    network: Network,
+    "spiral-violence": SpiralViolence,
+    credits: Credits
   };
 </script>
 

@@ -23,12 +23,12 @@
 
 <!-- svelte-ignore a11y-media-has-caption -->
 <video
-  src="./video/test-small.mp4"
+  src="./video/por.mp4"
   bind:this={video}
   bind:currentTime
   height={60}
-  autoplay="true"
-  loop="true"
+  autoplay
+  loop
 />
 
 <Canvas
@@ -44,3 +44,10 @@
     <MiniVideo x={d.x} y={d.y} size={d.r} {video} {currentTime} />
   {/each}
 </Canvas>
+
+<style>
+  video {
+    position: absolute;
+    left: -1000px;
+  }
+</style>

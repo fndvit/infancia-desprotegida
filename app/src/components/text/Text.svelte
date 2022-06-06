@@ -1,5 +1,6 @@
 <script>
 export let text;
+export let list;
 export let header;
 export let dropcap = true;
 </script>
@@ -7,10 +8,19 @@ export let dropcap = true;
   {#if header}
   <h3>{@html header}</h3>
   {/if}
+
   {#if text}
   {#each text as p,i}
       <p class='{i === 0 && dropcap === true ? 'has-dropcap' : ''}'>{@html p.p}</p>
   {/each}
+  {/if}
+
+  {#if list}
+    <ul>
+      {#each list as li}
+      <li>{@html li}</li>
+      {/each}
+    </ul>
   {/if}
 </div>
 

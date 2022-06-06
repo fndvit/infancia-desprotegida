@@ -4,8 +4,10 @@
     export let src;
     export let id;
     export let captions;
+    export let size;
 
-    const layout = 'wide';
+    const layout = (size === 'small') ? 'col-text' : 'cover';
+    const section = (size === 'small') ? 'col-text' : 'full chapter';
 
     let element;
     let intersecting;
@@ -13,7 +15,7 @@
 </script>
 
 <IntersectionObserver {element} bind:intersecting threshold=.5>
-<section class='wide interview {intersecting ? 'visible' : 'invisible'}' {id} bind:this={element}>
+<section class='{section} interview {intersecting ? 'visible' : 'invisible'}' {id} bind:this={element}>
     <Video
         {src}
         {captions}
@@ -25,7 +27,11 @@
 </IntersectionObserver>
 
 <style>
-    .interview { transition: opacity .5s; }
+    .interview {
+        transition: opacity .5s;
+        padding-top: 3rem;
+        padding-bottom: 3rem;
+    }
     .visible { opacity: 1; }
     .invisible { opacity: 0; }
 </style>

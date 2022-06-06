@@ -56,10 +56,10 @@ const parseGDocs = async () => {
 	for (let d of gdocs) {
 		const json = await fetchGDocs(d);
 		const json_dest = `${process.cwd()}/${d.dest}.json`;
-		const md_dest = `${process.cwd()}/${d.dest}.md`;
-		const md = textToMd(json);
+		// const md_dest = `${process.cwd()}/${d.dest}.md`;
+		// const md = textToMd(json);
 		fs.writeFileSync(json_dest, JSON.stringify(json));
-		fs.writeFileSync(md_dest, md);
+		// fs.writeFileSync(md_dest, md);
 	}
 };
 

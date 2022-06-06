@@ -14,7 +14,7 @@
 </script>
 
 <div class='chapter-wrapper'>
-    <section class='full chapter sticky' {id} bind:this={element}>
+    <section class='full chapter' {id} bind:this={element}>
         <Video
             {src}
             {captions}
@@ -22,21 +22,25 @@
             controls = ''
             scroll = false
         />
-    </section>
-    <section class='col-text'>
-        <h2 class='header {id}'>{@html header}</h2>
+        <h2 class='col-text {id}'>{@html header}</h2>
     </section>
 </div>
 
 <style>
+    .chapter-wrapper {
+        height: 50vh;
+    }
+    h2 {
+        margin-top: -20vh;
+    }
   .header { 
-      height: calc(100vh - 4rem);
-      position:relative;
+      height: calc(50vh - 4rem);
+      position:absolute;
       margin: 1rem 0 4rem -.5rem;
       padding: .5rem;
+
   }
-  .sticky {
-      position: sticky;
-      top: 0;
+  .full {
+        height: calc(50vh - 2rem);
   }
 </style>

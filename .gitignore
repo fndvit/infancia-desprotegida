@@ -2,6 +2,7 @@
 app/node_modules/
 app/public/build/
 app/gdocs.json
+/video-processing/
 
 .DS_Store
 /videos-unprocessed/

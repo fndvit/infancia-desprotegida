@@ -11,8 +11,6 @@
   let width, height;
   let progress = 0;
 
-  console.log([...new Array(dots.length)].map((d, i) => i / (dots.length - 1)));
-
   let scaleRadius = scaleLinear().domain(dots).range(range);
 
   let scaleNumber = scaleLinear()
@@ -29,9 +27,10 @@
     const r = scaleRadius(n);
     return { x: x, y: y, r: r };
   });
+
 </script>
 
-<div>
+<div class="graphic-wrapper">
   <Scroller bind:progress>
     <div
       class="graphic"
@@ -39,13 +38,12 @@
       bind:clientHeight={height}
       bind:clientWidth={width}
     >
-      {#if height}
         <Scatter {width} {height} {data} />
-      {/if}
     </div>
     <div slot="foreground">
       {#each text as p}
-        <section>
+        <section class="col-text">
+          <p class="narrow number">{Number(p.data).toLocaleString('de-DE')}</p>
           <p class="narrow">{p.p}</p>
         </section>
       {/each}
@@ -54,6 +52,9 @@
 </div>
 
 <style>
+  .graphic-wrapper {
+    padding-bottom: 10rem;
+  }
   section {
     height: 100vh;
   }
@@ -64,8 +65,15 @@
   p {
     width: 50%;
     max-width: 24rem;
-    padding: 1rem;
     margin: 0;
     font-size: 1.5rem;
+    padding-top:0;
+  }
+  .number {
+    font-family: montserrat, serif;
+    font-weight: 100;
+    font-size: 3rem;
+    margin-bottom: 0;
+    padding-bottom:0;
   }
 </style>

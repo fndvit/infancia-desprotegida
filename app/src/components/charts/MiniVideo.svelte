@@ -9,7 +9,7 @@
 
   $: render = ({ context }) => {
     currentTime;
-    context.drawImage(video, x, y, size, size);
+    context.drawImage(video, x, y, size*.625, size);
   };
 </script>
 
