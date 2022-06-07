@@ -18,7 +18,6 @@
     (d) => d.y
   );
 
-  $: console.log(video);
 </script>
 
 <!-- svelte-ignore a11y-media-has-caption -->

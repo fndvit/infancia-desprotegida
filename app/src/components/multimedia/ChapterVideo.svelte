@@ -7,6 +7,7 @@
     export let color;
 
     const layout = 'cover';
+    const audible = false;
 
     let element;
     let intersecting;
@@ -23,6 +24,7 @@
         {layout}
         controls = ''
         scroll = false
+        {audible}
     />
 </section>
 </IntersectionObserver>

@@ -84,7 +84,7 @@
             cx={node.cx}
             cy={node.cy}
             r={radius}
-            fill='#fff'
+            stroke='#fff'
 		/>
         {/each}
 	</g>

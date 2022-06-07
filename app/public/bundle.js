@@ -4,6 +4,7 @@ var app = (function () {
     'use strict';
 
     function noop() { }
+    const identity$3 = x => x;
     function assign(tar, src) {
         // @ts-ignore
         for (const k in src)
@@ -77,7 +78,39 @@ var app = (function () {
     }
 
     const is_client = typeof window !== 'undefined';
+    let now = is_client
+        ? () => window.performance.now()
+        : () => Date.now();
     let raf = is_client ? cb => requestAnimationFrame(cb) : noop;
+
+    const tasks = new Set();
+    function run_tasks(now) {
+        tasks.forEach(task => {
+            if (!task.c(now)) {
+                tasks.delete(task);
+                task.f();
+            }
+        });
+        if (tasks.size !== 0)
+            raf(run_tasks);
+    }
+    /**
+     * Creates a new task that runs on each raf frame
+     * until it returns a falsy value or is aborted
+     */
+    function loop(callback) {
+        let task;
+        if (tasks.size === 0)
+            raf(run_tasks);
+        return {
+            promise: new Promise(fulfill => {
+                tasks.add(task = { c: callback, f: fulfill });
+            }),
+            abort() {
+                tasks.delete(task);
+            }
+        };
+    }
 
     function append(target, node) {
         target.appendChild(node);
@@ -220,6 +253,67 @@ var app = (function () {
         }
     }
 
+    const active_docs = new Set();
+    let active = 0;
+    // https://github.com/darkskyapp/string-hash/blob/master/index.js
+    function hash(str) {
+        let hash = 5381;
+        let i = str.length;
+        while (i--)
+            hash = ((hash << 5) - hash) ^ str.charCodeAt(i);
+        return hash >>> 0;
+    }
+    function create_rule(node, a, b, duration, delay, ease, fn, uid = 0) {
+        const step = 16.666 / duration;
+        let keyframes = '{\n';
+        for (let p = 0; p <= 1; p += step) {
+            const t = a + (b - a) * ease(p);
+            keyframes += p * 100 + `%{${fn(t, 1 - t)}}\n`;
+        }
+        const rule = keyframes + `100% {${fn(b, 1 - b)}}\n}`;
+        const name = `__svelte_${hash(rule)}_${uid}`;
+        const doc = node.ownerDocument;
+        active_docs.add(doc);
+        const stylesheet = doc.__svelte_stylesheet || (doc.__svelte_stylesheet = doc.head.appendChild(element('style')).sheet);
+        const current_rules = doc.__svelte_rules || (doc.__svelte_rules = {});
+        if (!current_rules[name]) {
+            current_rules[name] = true;
+            stylesheet.insertRule(`@keyframes ${name} ${rule}`, stylesheet.cssRules.length);
+        }
+        const animation = node.style.animation || '';
+        node.style.animation = `${animation ? `${animation}, ` : ''}${name} ${duration}ms linear ${delay}ms 1 both`;
+        active += 1;
+        return name;
+    }
+    function delete_rule(node, name) {
+        const previous = (node.style.animation || '').split(', ');
+        const next = previous.filter(name
+            ? anim => anim.indexOf(name) < 0 // remove specific animation
+            : anim => anim.indexOf('__svelte') === -1 // remove all Svelte animations
+        );
+        const deleted = previous.length - next.length;
+        if (deleted) {
+            node.style.animation = next.join(', ');
+            active -= deleted;
+            if (!active)
+                clear_rules();
+        }
+    }
+    function clear_rules() {
+        raf(() => {
+            if (active)
+                return;
+            active_docs.forEach(doc => {
+                const stylesheet = doc.__svelte_stylesheet;
+                let i = stylesheet.cssRules.length;
+                while (i--)
+                    stylesheet.deleteRule(i);
+                doc.__svelte_rules = {};
+            });
+            active_docs.clear();
+        });
+    }
+
     let current_component;
     function set_current_component(component) {
         current_component = component;
@@ -338,6 +432,20 @@ var app = (function () {
             $$.after_update.forEach(add_render_callback);
         }
     }
+
+    let promise;
+    function wait() {
+        if (!promise) {
+            promise = Promise.resolve();
+            promise.then(() => {
+                promise = null;
+            });
+        }
+        return promise;
+    }
+    function dispatch(node, direction, kind) {
+        node.dispatchEvent(custom_event(`${direction ? 'intro' : 'outro'}${kind}`));
+    }
     const outroing = new Set();
     let outros;
     function group_outros() {
@@ -374,6 +482,112 @@ var app = (function () {
             });
             block.o(local);
         }
+    }
+    const null_transition = { duration: 0 };
+    function create_bidirectional_transition(node, fn, params, intro) {
+        let config = fn(node, params);
+        let t = intro ? 0 : 1;
+        let running_program = null;
+        let pending_program = null;
+        let animation_name = null;
+        function clear_animation() {
+            if (animation_name)
+                delete_rule(node, animation_name);
+        }
+        function init(program, duration) {
+            const d = program.b - t;
+            duration *= Math.abs(d);
+            return {
+                a: t,
+                b: program.b,
+                d,
+                duration,
+                start: program.start,
+                end: program.start + duration,
+                group: program.group
+            };
+        }
+        function go(b) {
+            const { delay = 0, duration = 300, easing = identity$3, tick = noop, css } = config || null_transition;
+            const program = {
+                start: now() + delay,
+                b
+            };
+            if (!b) {
+                // @ts-ignore todo: improve typings
+                program.group = outros;
+                outros.r += 1;
+            }
+            if (running_program || pending_program) {
+                pending_program = program;
+            }
+            else {
+                // if this is an intro, and there's a delay, we need to do
+                // an initial tick and/or apply CSS animation immediately
+                if (css) {
+                    clear_animation();
+                    animation_name = create_rule(node, t, b, duration, delay, easing, css);
+                }
+                if (b)
+                    tick(0, 1);
+                running_program = init(program, duration);
+                add_render_callback(() => dispatch(node, b, 'start'));
+                loop(now => {
+                    if (pending_program && now > pending_program.start) {
+                        running_program = init(pending_program, duration);
+                        pending_program = null;
+                        dispatch(node, running_program.b, 'start');
+                        if (css) {
+                            clear_animation();
+                            animation_name = create_rule(node, t, running_program.b, running_program.duration, 0, easing, config.css);
+                        }
+                    }
+                    if (running_program) {
+                        if (now >= running_program.end) {
+                            tick(t = running_program.b, 1 - t);
+                            dispatch(node, running_program.b, 'end');
+                            if (!pending_program) {
+                                // we're done
+                                if (running_program.b) {
+                                    // intro — we can tidy up immediately
+                                    clear_animation();
+                                }
+                                else {
+                                    // outro — needs to be coordinated
+                                    if (!--running_program.group.r)
+                                        run_all(running_program.group.c);
+                                }
+                            }
+                            running_program = null;
+                        }
+                        else if (now >= running_program.start) {
+                            const p = now - running_program.start;
+                            t = running_program.a + running_program.d * easing(p / running_program.duration);
+                            tick(t, 1 - t);
+                        }
+                    }
+                    return !!(running_program || pending_program);
+                });
+            }
+        }
+        return {
+            run(b) {
+                if (is_function(config)) {
+                    wait().then(() => {
+                        // @ts-ignore
+                        config = config();
+                        go(b);
+                    });
+                }
+                else {
+                    go(b);
+                }
+            },
+            end() {
+                clear_animation();
+                running_program = pending_program = null;
+            }
+        };
     }
 
     const globals = (typeof window !== 'undefined'
@@ -1188,535 +1402,11 @@ var app = (function () {
     	}
     }
 
-    /* src/components/multimedia/Video.svelte generated by Svelte v3.38.2 */
-
-    const file$e = "src/components/multimedia/Video.svelte";
-
-    // (40:0) {:else}
-    function create_else_block$3(ctx) {
-    	let video;
-    	let video_class_value;
-    	let video_poster_value;
-    	let video_src_value;
-    	let video_updating = false;
-    	let video_animationframe;
-    	let mounted;
-    	let dispose;
-    	let if_block = /*captions*/ ctx[3] && create_if_block_2$1(ctx);
-
-    	function video_timeupdate_handler() {
-    		cancelAnimationFrame(video_animationframe);
-
-    		if (!video.paused) {
-    			video_animationframe = raf(video_timeupdate_handler);
-    			video_updating = true;
-    		}
-
-    		/*video_timeupdate_handler*/ ctx[10].call(video);
-    	}
-
-    	const block = {
-    		c: function create() {
-    			video = element("video");
-    			if (if_block) if_block.c();
-    			attr_dev(video, "preload", "auto");
-    			attr_dev(video, "class", video_class_value = "" + (null_to_empty(/*layout*/ ctx[4]) + " svelte-1wp000x"));
-    			attr_dev(video, "poster", video_poster_value = "img/" + /*src*/ ctx[2] + ".jpg");
-    			if (video.src !== (video_src_value = "video/" + /*src*/ ctx[2] + "_" + /*vidSize*/ ctx[8] + ".mp4")) attr_dev(video, "src", video_src_value);
-    			video.muted = true;
-    			video.autoplay = "false";
-    			video.playsInline = "true";
-    			video.loop = "false";
-    			video.controls = /*controls*/ ctx[6];
-    			if (/*duration*/ ctx[1] === void 0) add_render_callback(() => /*video_durationchange_handler*/ ctx[11].call(video));
-    			add_location(video, file$e, 40, 0, 733);
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, video, anchor);
-    			if (if_block) if_block.m(video, null);
-
-    			if (!mounted) {
-    				dispose = [
-    					listen_dev(video, "timeupdate", video_timeupdate_handler),
-    					listen_dev(video, "durationchange", /*video_durationchange_handler*/ ctx[11])
-    				];
-
-    				mounted = true;
-    			}
-    		},
-    		p: function update(ctx, dirty) {
-    			if (/*captions*/ ctx[3]) {
-    				if (if_block) {
-    					if_block.p(ctx, dirty);
-    				} else {
-    					if_block = create_if_block_2$1(ctx);
-    					if_block.c();
-    					if_block.m(video, null);
-    				}
-    			} else if (if_block) {
-    				if_block.d(1);
-    				if_block = null;
-    			}
-
-    			if (dirty & /*layout*/ 16 && video_class_value !== (video_class_value = "" + (null_to_empty(/*layout*/ ctx[4]) + " svelte-1wp000x"))) {
-    				attr_dev(video, "class", video_class_value);
-    			}
-
-    			if (dirty & /*src*/ 4 && video_poster_value !== (video_poster_value = "img/" + /*src*/ ctx[2] + ".jpg")) {
-    				attr_dev(video, "poster", video_poster_value);
-    			}
-
-    			if (dirty & /*src, vidSize*/ 260 && video.src !== (video_src_value = "video/" + /*src*/ ctx[2] + "_" + /*vidSize*/ ctx[8] + ".mp4")) {
-    				attr_dev(video, "src", video_src_value);
-    			}
-
-    			if (dirty & /*controls*/ 64) {
-    				prop_dev(video, "controls", /*controls*/ ctx[6]);
-    			}
-
-    			if (!video_updating && dirty & /*time*/ 1 && !isNaN(/*time*/ ctx[0])) {
-    				video.currentTime = /*time*/ ctx[0];
-    			}
-
-    			video_updating = false;
-    		},
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(video);
-    			if (if_block) if_block.d();
-    			mounted = false;
-    			run_all(dispose);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_else_block$3.name,
-    		type: "else",
-    		source: "(40:0) {:else}",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    // (23:0) {#if !scroll}
-    function create_if_block$6(ctx) {
-    	let video;
-    	let video_class_value;
-    	let video_poster_value;
-    	let video_src_value;
-    	let if_block = /*captions*/ ctx[3] && create_if_block_1$1(ctx);
-
-    	const block = {
-    		c: function create() {
-    			video = element("video");
-    			if (if_block) if_block.c();
-    			attr_dev(video, "class", video_class_value = "" + (null_to_empty(/*layout*/ ctx[4]) + " svelte-1wp000x"));
-    			attr_dev(video, "preload", "auto");
-    			attr_dev(video, "poster", video_poster_value = "img/" + /*src*/ ctx[2] + ".jpg");
-    			if (video.src !== (video_src_value = "video/" + /*src*/ ctx[2] + "_" + /*vidSize*/ ctx[8] + ".mp4")) attr_dev(video, "src", video_src_value);
-    			video.muted = true;
-    			video.autoplay = "true";
-    			video.playsInline = "true";
-    			video.loop = "true";
-    			video.controls = /*controls*/ ctx[6];
-    			add_location(video, file$e, 23, 0, 440);
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, video, anchor);
-    			if (if_block) if_block.m(video, null);
-    		},
-    		p: function update(ctx, dirty) {
-    			if (/*captions*/ ctx[3]) {
-    				if (if_block) {
-    					if_block.p(ctx, dirty);
-    				} else {
-    					if_block = create_if_block_1$1(ctx);
-    					if_block.c();
-    					if_block.m(video, null);
-    				}
-    			} else if (if_block) {
-    				if_block.d(1);
-    				if_block = null;
-    			}
-
-    			if (dirty & /*layout*/ 16 && video_class_value !== (video_class_value = "" + (null_to_empty(/*layout*/ ctx[4]) + " svelte-1wp000x"))) {
-    				attr_dev(video, "class", video_class_value);
-    			}
-
-    			if (dirty & /*src*/ 4 && video_poster_value !== (video_poster_value = "img/" + /*src*/ ctx[2] + ".jpg")) {
-    				attr_dev(video, "poster", video_poster_value);
-    			}
-
-    			if (dirty & /*src, vidSize*/ 260 && video.src !== (video_src_value = "video/" + /*src*/ ctx[2] + "_" + /*vidSize*/ ctx[8] + ".mp4")) {
-    				attr_dev(video, "src", video_src_value);
-    			}
-
-    			if (dirty & /*controls*/ 64) {
-    				prop_dev(video, "controls", /*controls*/ ctx[6]);
-    			}
-    		},
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(video);
-    			if (if_block) if_block.d();
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_if_block$6.name,
-    		type: "if",
-    		source: "(23:0) {#if !scroll}",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    // (54:2) {#if captions}
-    function create_if_block_2$1(ctx) {
-    	let track;
-    	let track_src_value;
-
-    	const block = {
-    		c: function create() {
-    			track = element("track");
-    			attr_dev(track, "kind", "captions");
-    			attr_dev(track, "label", "Catalan");
-    			attr_dev(track, "srclang", "ca");
-    			if (track.src !== (track_src_value = /*captions*/ ctx[3])) attr_dev(track, "src", track_src_value);
-    			track.default = true;
-    			add_location(track, file$e, 54, 2, 981);
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, track, anchor);
-    		},
-    		p: function update(ctx, dirty) {
-    			if (dirty & /*captions*/ 8 && track.src !== (track_src_value = /*captions*/ ctx[3])) {
-    				attr_dev(track, "src", track_src_value);
-    			}
-    		},
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(track);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_if_block_2$1.name,
-    		type: "if",
-    		source: "(54:2) {#if captions}",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    // (35:2) {#if captions}
-    function create_if_block_1$1(ctx) {
-    	let track;
-    	let track_src_value;
-
-    	const block = {
-    		c: function create() {
-    			track = element("track");
-    			attr_dev(track, "kind", "captions");
-    			attr_dev(track, "label", "Catalan");
-    			attr_dev(track, "srclang", "ca");
-    			if (track.src !== (track_src_value = /*captions*/ ctx[3])) attr_dev(track, "src", track_src_value);
-    			track.default = true;
-    			add_location(track, file$e, 35, 2, 631);
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, track, anchor);
-    		},
-    		p: function update(ctx, dirty) {
-    			if (dirty & /*captions*/ 8 && track.src !== (track_src_value = /*captions*/ ctx[3])) {
-    				attr_dev(track, "src", track_src_value);
-    			}
-    		},
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(track);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_if_block_1$1.name,
-    		type: "if",
-    		source: "(35:2) {#if captions}",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    function create_fragment$h(ctx) {
-    	let if_block_anchor;
-    	let mounted;
-    	let dispose;
-    	add_render_callback(/*onwindowresize*/ ctx[9]);
-
-    	function select_block_type(ctx, dirty) {
-    		if (!/*scroll*/ ctx[5]) return create_if_block$6;
-    		return create_else_block$3;
-    	}
-
-    	let current_block_type = select_block_type(ctx);
-    	let if_block = current_block_type(ctx);
-
-    	const block = {
-    		c: function create() {
-    			if_block.c();
-    			if_block_anchor = empty();
-    		},
-    		l: function claim(nodes) {
-    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
-    		},
-    		m: function mount(target, anchor) {
-    			if_block.m(target, anchor);
-    			insert_dev(target, if_block_anchor, anchor);
-
-    			if (!mounted) {
-    				dispose = listen_dev(window, "resize", /*onwindowresize*/ ctx[9]);
-    				mounted = true;
-    			}
-    		},
-    		p: function update(ctx, [dirty]) {
-    			if (current_block_type === (current_block_type = select_block_type(ctx)) && if_block) {
-    				if_block.p(ctx, dirty);
-    			} else {
-    				if_block.d(1);
-    				if_block = current_block_type(ctx);
-
-    				if (if_block) {
-    					if_block.c();
-    					if_block.m(if_block_anchor.parentNode, if_block_anchor);
-    				}
-    			}
-    		},
-    		i: noop,
-    		o: noop,
-    		d: function destroy(detaching) {
-    			if_block.d(detaching);
-    			if (detaching) detach_dev(if_block_anchor);
-    			mounted = false;
-    			dispose();
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_fragment$h.name,
-    		type: "component",
-    		source: "",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    function instance$h($$self, $$props, $$invalidate) {
-    	let vidSize;
-    	let { $$slots: slots = {}, $$scope } = $$props;
-    	validate_slots("Video", slots, []);
-    	let { src } = $$props;
-    	let { captions } = $$props;
-    	let { time } = $$props;
-    	let { duration } = $$props;
-    	let { layout } = $$props;
-    	let { scroll = false } = $$props;
-    	let { controls = "controls" } = $$props;
-    	let width;
-    	const writable_props = ["src", "captions", "time", "duration", "layout", "scroll", "controls"];
-
-    	Object.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<Video> was created with unknown prop '${key}'`);
-    	});
-
-    	function onwindowresize() {
-    		$$invalidate(7, width = window.innerWidth);
-    	}
-
-    	function video_timeupdate_handler() {
-    		time = this.currentTime;
-    		$$invalidate(0, time);
-    	}
-
-    	function video_durationchange_handler() {
-    		duration = this.duration;
-    		$$invalidate(1, duration);
-    	}
-
-    	$$self.$$set = $$props => {
-    		if ("src" in $$props) $$invalidate(2, src = $$props.src);
-    		if ("captions" in $$props) $$invalidate(3, captions = $$props.captions);
-    		if ("time" in $$props) $$invalidate(0, time = $$props.time);
-    		if ("duration" in $$props) $$invalidate(1, duration = $$props.duration);
-    		if ("layout" in $$props) $$invalidate(4, layout = $$props.layout);
-    		if ("scroll" in $$props) $$invalidate(5, scroll = $$props.scroll);
-    		if ("controls" in $$props) $$invalidate(6, controls = $$props.controls);
-    	};
-
-    	$$self.$capture_state = () => ({
-    		src,
-    		captions,
-    		time,
-    		duration,
-    		layout,
-    		scroll,
-    		controls,
-    		width,
-    		vidSize
-    	});
-
-    	$$self.$inject_state = $$props => {
-    		if ("src" in $$props) $$invalidate(2, src = $$props.src);
-    		if ("captions" in $$props) $$invalidate(3, captions = $$props.captions);
-    		if ("time" in $$props) $$invalidate(0, time = $$props.time);
-    		if ("duration" in $$props) $$invalidate(1, duration = $$props.duration);
-    		if ("layout" in $$props) $$invalidate(4, layout = $$props.layout);
-    		if ("scroll" in $$props) $$invalidate(5, scroll = $$props.scroll);
-    		if ("controls" in $$props) $$invalidate(6, controls = $$props.controls);
-    		if ("width" in $$props) $$invalidate(7, width = $$props.width);
-    		if ("vidSize" in $$props) $$invalidate(8, vidSize = $$props.vidSize);
-    	};
-
-    	if ($$props && "$$inject" in $$props) {
-    		$$self.$inject_state($$props.$$inject);
-    	}
-
-    	$$self.$$.update = () => {
-    		if ($$self.$$.dirty & /*width*/ 128) {
-    			$$invalidate(8, vidSize = width < 854
-    			? "s"
-    			: width < 1280 ? "m" : width < 1920 ? "l" : "xl");
-    		}
-    	};
-
-    	return [
-    		time,
-    		duration,
-    		src,
-    		captions,
-    		layout,
-    		scroll,
-    		controls,
-    		width,
-    		vidSize,
-    		onwindowresize,
-    		video_timeupdate_handler,
-    		video_durationchange_handler
-    	];
-    }
-
-    class Video extends SvelteComponentDev {
-    	constructor(options) {
-    		super(options);
-
-    		init(this, options, instance$h, create_fragment$h, safe_not_equal, {
-    			src: 2,
-    			captions: 3,
-    			time: 0,
-    			duration: 1,
-    			layout: 4,
-    			scroll: 5,
-    			controls: 6
-    		});
-
-    		dispatch_dev("SvelteRegisterComponent", {
-    			component: this,
-    			tagName: "Video",
-    			options,
-    			id: create_fragment$h.name
-    		});
-
-    		const { ctx } = this.$$;
-    		const props = options.props || {};
-
-    		if (/*src*/ ctx[2] === undefined && !("src" in props)) {
-    			console.warn("<Video> was created without expected prop 'src'");
-    		}
-
-    		if (/*captions*/ ctx[3] === undefined && !("captions" in props)) {
-    			console.warn("<Video> was created without expected prop 'captions'");
-    		}
-
-    		if (/*time*/ ctx[0] === undefined && !("time" in props)) {
-    			console.warn("<Video> was created without expected prop 'time'");
-    		}
-
-    		if (/*duration*/ ctx[1] === undefined && !("duration" in props)) {
-    			console.warn("<Video> was created without expected prop 'duration'");
-    		}
-
-    		if (/*layout*/ ctx[4] === undefined && !("layout" in props)) {
-    			console.warn("<Video> was created without expected prop 'layout'");
-    		}
-    	}
-
-    	get src() {
-    		throw new Error("<Video>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	set src(value) {
-    		throw new Error("<Video>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	get captions() {
-    		throw new Error("<Video>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	set captions(value) {
-    		throw new Error("<Video>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	get time() {
-    		throw new Error("<Video>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	set time(value) {
-    		throw new Error("<Video>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	get duration() {
-    		throw new Error("<Video>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	set duration(value) {
-    		throw new Error("<Video>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	get layout() {
-    		throw new Error("<Video>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	set layout(value) {
-    		throw new Error("<Video>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	get scroll() {
-    		throw new Error("<Video>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	set scroll(value) {
-    		throw new Error("<Video>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	get controls() {
-    		throw new Error("<Video>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	set controls(value) {
-    		throw new Error("<Video>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-    }
-
     /* src/components/multimedia/Photo.svelte generated by Svelte v3.38.2 */
 
-    const file$d = "src/components/multimedia/Photo.svelte";
+    const file$e = "src/components/multimedia/Photo.svelte";
 
-    function create_fragment$g(ctx) {
+    function create_fragment$h(ctx) {
     	let img;
     	let img_class_value;
     	let img_src_value;
@@ -1727,7 +1417,7 @@ var app = (function () {
     			attr_dev(img, "class", img_class_value = "" + (null_to_empty(/*layout*/ ctx[2]) + " svelte-mczv6o"));
     			if (img.src !== (img_src_value = "img/" + /*src*/ ctx[0])) attr_dev(img, "src", img_src_value);
     			attr_dev(img, "alt", /*alt*/ ctx[1]);
-    			add_location(img, file$d, 6, 0, 77);
+    			add_location(img, file$e, 6, 0, 77);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -1757,7 +1447,7 @@ var app = (function () {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$g.name,
+    		id: create_fragment$h.name,
     		type: "component",
     		source: "",
     		ctx
@@ -1766,7 +1456,7 @@ var app = (function () {
     	return block;
     }
 
-    function instance$g($$self, $$props, $$invalidate) {
+    function instance$h($$self, $$props, $$invalidate) {
     	let { $$slots: slots = {}, $$scope } = $$props;
     	validate_slots("Photo", slots, []);
     	let { src } = $$props;
@@ -1802,13 +1492,13 @@ var app = (function () {
     class Photo extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$g, create_fragment$g, safe_not_equal, { src: 0, alt: 1, layout: 2 });
+    		init(this, options, instance$h, create_fragment$h, safe_not_equal, { src: 0, alt: 1, layout: 2 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Photo",
     			options,
-    			id: create_fragment$g.name
+    			id: create_fragment$h.name
     		});
 
     		const { ctx } = this.$$;
@@ -1853,38 +1543,49 @@ var app = (function () {
     }
 
     /* src/components/multimedia/Intro.svelte generated by Svelte v3.38.2 */
-    const file$c = "src/components/multimedia/Intro.svelte";
+
+    const { console: console_1 } = globals;
+    const file$d = "src/components/multimedia/Intro.svelte";
 
     function get_each_context$7(ctx, list, i) {
     	const child_ctx = ctx.slice();
-    	child_ctx[9] = list[i];
+    	child_ctx[24] = list[i];
+    	child_ctx[26] = i;
     	return child_ctx;
     }
 
-    // (29:2) 
-    function create_background_slot$1(ctx) {
+    // (56:2) 
+    function create_background_slot$2(ctx) {
     	let div2;
     	let div0;
     	let photo;
     	let t;
     	let div1;
-    	let video;
+    	let video_1;
+    	let video_1_class_value;
+    	let video_1_poster_value;
+    	let video_1_src_value;
+    	let video_1_updating = false;
+    	let video_1_animationframe;
     	let current;
+    	let mounted;
+    	let dispose;
 
     	photo = new Photo({
-    			props: { src: /*poster*/ ctx[5], layout: layout$2 },
+    			props: { src: /*poster*/ ctx[9], layout: layout$2 },
     			$$inline: true
     		});
 
-    	video = new Video({
-    			props: {
-    				src: /*src*/ ctx[4],
-    				layout: "" + (layout$2 + " " + /*fade*/ ctx[3]),
-    				controls: "",
-    				scroll: "false"
-    			},
-    			$$inline: true
-    		});
+    	function video_1_timeupdate_handler() {
+    		cancelAnimationFrame(video_1_animationframe);
+
+    		if (!video_1.paused) {
+    			video_1_animationframe = raf(video_1_timeupdate_handler);
+    			video_1_updating = true;
+    		}
+
+    		/*video_1_timeupdate_handler*/ ctx[16].call(video_1);
+    	}
 
     	const block = {
     		c: function create() {
@@ -1893,14 +1594,25 @@ var app = (function () {
     			create_component(photo.$$.fragment);
     			t = space();
     			div1 = element("div");
-    			create_component(video.$$.fragment);
-    			attr_dev(div0, "class", "full absolute svelte-1jvrpn5");
-    			add_location(div0, file$c, 29, 6, 729);
-    			attr_dev(div1, "class", "full absolute svelte-1jvrpn5");
-    			add_location(div1, file$c, 35, 6, 848);
-    			attr_dev(div2, "class", "chapter");
+    			video_1 = element("video");
+    			attr_dev(div0, "class", "full absolute svelte-1fiu7ba");
+    			add_location(div0, file$d, 56, 6, 1172);
+    			attr_dev(video_1, "class", video_1_class_value = "" + (layout$2 + " " + /*fade*/ ctx[7] + " svelte-1fiu7ba"));
+    			attr_dev(video_1, "preload", "auto");
+    			attr_dev(video_1, "poster", video_1_poster_value = "img/" + /*src*/ ctx[8] + ".jpg");
+    			if (video_1.src !== (video_1_src_value = "video/" + /*src*/ ctx[8] + "_" + /*vidSize*/ ctx[10] + ".mp4")) attr_dev(video_1, "src", video_1_src_value);
+    			video_1.muted = /*muted*/ ctx[11];
+    			video_1.autoplay = "true";
+    			video_1.playsInline = "true";
+    			video_1.loop = "true";
+    			video_1.controls = false;
+    			if (/*duration*/ ctx[5] === void 0) add_render_callback(() => /*video_1_durationchange_handler*/ ctx[17].call(video_1));
+    			add_location(video_1, file$d, 70, 8, 1494);
+    			attr_dev(div1, "class", "full absolute svelte-1fiu7ba");
+    			add_location(div1, file$d, 62, 6, 1291);
+    			attr_dev(div2, "class", "chapter interactive svelte-1fiu7ba");
     			attr_dev(div2, "slot", "background");
-    			add_location(div2, file$c, 28, 2, 683);
+    			add_location(div2, file$d, 55, 2, 1114);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div2, anchor);
@@ -1908,82 +1620,117 @@ var app = (function () {
     			mount_component(photo, div0, null);
     			append_dev(div2, t);
     			append_dev(div2, div1);
-    			mount_component(video, div1, null);
+    			append_dev(div1, video_1);
+    			/*video_1_binding*/ ctx[18](video_1);
     			current = true;
+
+    			if (!mounted) {
+    				dispose = [
+    					listen_dev(video_1, "timeupdate", video_1_timeupdate_handler),
+    					listen_dev(video_1, "durationchange", /*video_1_durationchange_handler*/ ctx[17])
+    				];
+
+    				mounted = true;
+    			}
     		},
     		p: function update(ctx, dirty) {
     			const photo_changes = {};
-    			if (dirty & /*poster*/ 32) photo_changes.src = /*poster*/ ctx[5];
+    			if (dirty & /*poster*/ 512) photo_changes.src = /*poster*/ ctx[9];
     			photo.$set(photo_changes);
-    			const video_changes = {};
-    			if (dirty & /*src*/ 16) video_changes.src = /*src*/ ctx[4];
-    			if (dirty & /*fade*/ 8) video_changes.layout = "" + (layout$2 + " " + /*fade*/ ctx[3]);
-    			video.$set(video_changes);
+
+    			if (!current || dirty & /*fade*/ 128 && video_1_class_value !== (video_1_class_value = "" + (layout$2 + " " + /*fade*/ ctx[7] + " svelte-1fiu7ba"))) {
+    				attr_dev(video_1, "class", video_1_class_value);
+    			}
+
+    			if (!current || dirty & /*src*/ 256 && video_1_poster_value !== (video_1_poster_value = "img/" + /*src*/ ctx[8] + ".jpg")) {
+    				attr_dev(video_1, "poster", video_1_poster_value);
+    			}
+
+    			if (!current || dirty & /*src, vidSize*/ 1280 && video_1.src !== (video_1_src_value = "video/" + /*src*/ ctx[8] + "_" + /*vidSize*/ ctx[10] + ".mp4")) {
+    				attr_dev(video_1, "src", video_1_src_value);
+    			}
+
+    			if (!current || dirty & /*muted*/ 2048) {
+    				prop_dev(video_1, "muted", /*muted*/ ctx[11]);
+    			}
+
+    			if (!video_1_updating && dirty & /*time*/ 16 && !isNaN(/*time*/ ctx[4])) {
+    				video_1.currentTime = /*time*/ ctx[4];
+    			}
+
+    			video_1_updating = false;
     		},
     		i: function intro(local) {
     			if (current) return;
     			transition_in(photo.$$.fragment, local);
-    			transition_in(video.$$.fragment, local);
     			current = true;
     		},
     		o: function outro(local) {
     			transition_out(photo.$$.fragment, local);
-    			transition_out(video.$$.fragment, local);
     			current = false;
     		},
     		d: function destroy(detaching) {
     			if (detaching) detach_dev(div2);
     			destroy_component(photo);
-    			destroy_component(video);
+    			/*video_1_binding*/ ctx[18](null);
+    			mounted = false;
+    			run_all(dispose);
     		}
     	};
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_background_slot$1.name,
+    		id: create_background_slot$2.name,
     		type: "slot",
-    		source: "(29:2) ",
+    		source: "(56:2) ",
     		ctx
     	});
 
     	return block;
     }
 
-    // (51:6) {:else}
+    // (94:6) {:else}
     function create_else_block$2(ctx) {
     	let section;
     	let div;
-    	let p;
-    	let t0_value = /*p*/ ctx[9].p + "";
-    	let t0;
-    	let t1;
+    	let t;
+    	let section_class_value;
+
+    	function select_block_type_1(ctx, dirty) {
+    		if (/*i*/ ctx[26] % 2 === 0 || /*i*/ ctx[26] > 5) return create_if_block_1$2;
+    		return create_else_block_1;
+    	}
+
+    	let current_block_type = select_block_type_1(ctx);
+    	let if_block = current_block_type(ctx);
 
     	const block = {
     		c: function create() {
     			section = element("section");
     			div = element("div");
-    			p = element("p");
-    			t0 = text(t0_value);
-    			t1 = space();
-    			attr_dev(p, "class", "intro svelte-1jvrpn5");
-    			add_location(p, file$c, 53, 8, 1307);
-    			attr_dev(div, "class", "annotation svelte-1jvrpn5");
-    			add_location(div, file$c, 52, 8, 1274);
-    			attr_dev(section, "class", "col-text svelte-1jvrpn5");
-    			add_location(section, file$c, 51, 6, 1239);
+    			if_block.c();
+    			t = space();
+    			attr_dev(div, "class", "annotation svelte-1fiu7ba");
+    			add_location(div, file$d, 95, 8, 2224);
+    			attr_dev(section, "class", section_class_value = "" + ((/*play*/ ctx[3] ? "not-interactive" : "interactive") + " col-text" + " svelte-1fiu7ba"));
+    			add_location(section, file$d, 94, 6, 2146);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, section, anchor);
     			append_dev(section, div);
-    			append_dev(div, p);
-    			append_dev(p, t0);
-    			append_dev(section, t1);
+    			if_block.m(div, null);
+    			append_dev(section, t);
     		},
     		p: function update(ctx, dirty) {
-    			if (dirty & /*parts*/ 1 && t0_value !== (t0_value = /*p*/ ctx[9].p + "")) set_data_dev(t0, t0_value);
+    			if_block.p(ctx, dirty);
+
+    			if (dirty & /*play*/ 8 && section_class_value !== (section_class_value = "" + ((/*play*/ ctx[3] ? "not-interactive" : "interactive") + " col-text" + " svelte-1fiu7ba"))) {
+    				attr_dev(section, "class", section_class_value);
+    			}
     		},
     		d: function destroy(detaching) {
     			if (detaching) detach_dev(section);
+    			if_block.d();
     		}
     	};
 
@@ -1991,18 +1738,18 @@ var app = (function () {
     		block,
     		id: create_else_block$2.name,
     		type: "else",
-    		source: "(51:6) {:else}",
+    		source: "(94:6) {:else}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (47:4) {#if p.p === 'Infància (des)protegida'}
-    function create_if_block$5(ctx) {
+    // (90:4) {#if p.p === 'Infància (des)protegida'}
+    function create_if_block$7(ctx) {
     	let section;
     	let h1;
-    	let raw_value = /*boldFirst*/ ctx[6](/*p*/ ctx[9].p) + "";
+    	let raw_value = /*boldFirst*/ ctx[12](/*p*/ ctx[24].p) + "";
     	let t;
 
     	const block = {
@@ -2010,10 +1757,10 @@ var app = (function () {
     			section = element("section");
     			h1 = element("h1");
     			t = space();
-    			attr_dev(h1, "class", "svelte-1jvrpn5");
-    			add_location(h1, file$c, 48, 8, 1170);
-    			attr_dev(section, "class", "full title svelte-1jvrpn5");
-    			add_location(section, file$c, 47, 6, 1133);
+    			attr_dev(h1, "class", "svelte-1fiu7ba");
+    			add_location(h1, file$d, 91, 8, 2077);
+    			attr_dev(section, "class", "full title svelte-1fiu7ba");
+    			add_location(section, file$d, 90, 6, 2040);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, section, anchor);
@@ -2022,7 +1769,7 @@ var app = (function () {
     			append_dev(section, t);
     		},
     		p: function update(ctx, dirty) {
-    			if (dirty & /*parts*/ 1 && raw_value !== (raw_value = /*boldFirst*/ ctx[6](/*p*/ ctx[9].p) + "")) h1.innerHTML = raw_value;		},
+    			if (dirty & /*parts*/ 1 && raw_value !== (raw_value = /*boldFirst*/ ctx[12](/*p*/ ctx[24].p) + "")) h1.innerHTML = raw_value;		},
     		d: function destroy(detaching) {
     			if (detaching) detach_dev(section);
     		}
@@ -2030,21 +1777,146 @@ var app = (function () {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block$5.name,
+    		id: create_if_block$7.name,
     		type: "if",
-    		source: "(47:4) {#if p.p === 'Infància (des)protegida'}",
+    		source: "(90:4) {#if p.p === 'Infància (des)protegida'}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (46:4) {#each parts as p}
+    // (99:10) {:else}
+    function create_else_block_1(ctx) {
+    	let p;
+    	let html_tag;
+    	let raw_value = /*p*/ ctx[24].p + "";
+    	let t;
+    	let mounted;
+    	let dispose;
+    	let if_block = /*index*/ ctx[1] % 2 && create_if_block_2$1(ctx);
+
+    	const block = {
+    		c: function create() {
+    			p = element("p");
+    			t = space();
+    			if (if_block) if_block.c();
+    			html_tag = new HtmlTag(t);
+    			attr_dev(p, "class", "intro svelte-1fiu7ba");
+    			add_location(p, file$d, 99, 10, 2355);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, p, anchor);
+    			html_tag.m(raw_value, p);
+    			append_dev(p, t);
+    			if (if_block) if_block.m(p, null);
+
+    			if (!mounted) {
+    				dispose = listen_dev(p, "click", /*click_handler*/ ctx[15], false, false, false);
+    				mounted = true;
+    			}
+    		},
+    		p: function update(ctx, dirty) {
+    			if (dirty & /*parts*/ 1 && raw_value !== (raw_value = /*p*/ ctx[24].p + "")) html_tag.p(raw_value);
+
+    			if (/*index*/ ctx[1] % 2) {
+    				if (if_block) ; else {
+    					if_block = create_if_block_2$1(ctx);
+    					if_block.c();
+    					if_block.m(p, null);
+    				}
+    			} else if (if_block) {
+    				if_block.d(1);
+    				if_block = null;
+    			}
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(p);
+    			if (if_block) if_block.d();
+    			mounted = false;
+    			dispose();
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_else_block_1.name,
+    		type: "else",
+    		source: "(99:10) {:else}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (97:10) {#if i%2 === 0 || i > 5}
+    function create_if_block_1$2(ctx) {
+    	let p;
+    	let raw_value = /*p*/ ctx[24].p + "";
+
+    	const block = {
+    		c: function create() {
+    			p = element("p");
+    			attr_dev(p, "class", "intro svelte-1fiu7ba");
+    			add_location(p, file$d, 97, 10, 2294);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, p, anchor);
+    			p.innerHTML = raw_value;
+    		},
+    		p: function update(ctx, dirty) {
+    			if (dirty & /*parts*/ 1 && raw_value !== (raw_value = /*p*/ ctx[24].p + "")) p.innerHTML = raw_value;		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(p);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_if_block_1$2.name,
+    		type: "if",
+    		source: "(97:10) {#if i%2 === 0 || i > 5}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (101:12) {#if index % 2}
+    function create_if_block_2$1(ctx) {
+    	let div;
+
+    	const block = {
+    		c: function create() {
+    			div = element("div");
+    			attr_dev(div, "class", "sound svelte-1fiu7ba");
+    			add_location(div, file$d, 101, 12, 2456);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, div, anchor);
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(div);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_if_block_2$1.name,
+    		type: "if",
+    		source: "(101:12) {#if index % 2}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (89:4) {#each parts as p,i}
     function create_each_block$7(ctx) {
     	let if_block_anchor;
 
     	function select_block_type(ctx, dirty) {
-    		if (/*p*/ ctx[9].p === "Infància (des)protegida") return create_if_block$5;
+    		if (/*p*/ ctx[24].p === "Infància (des)protegida") return create_if_block$7;
     		return create_else_block$2;
     	}
 
@@ -2083,16 +1955,17 @@ var app = (function () {
     		block,
     		id: create_each_block$7.name,
     		type: "each",
-    		source: "(46:4) {#each parts as p}",
+    		source: "(89:4) {#each parts as p,i}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (45:2) 
-    function create_foreground_slot$1(ctx) {
+    // (88:2) 
+    function create_foreground_slot$2(ctx) {
     	let div;
+    	let div_class_value;
     	let each_value = /*parts*/ ctx[0];
     	validate_each_argument(each_value);
     	let each_blocks = [];
@@ -2109,8 +1982,9 @@ var app = (function () {
     				each_blocks[i].c();
     			}
 
+    			attr_dev(div, "class", div_class_value = "" + (null_to_empty(/*play*/ ctx[3] ? "not-interactive" : "interactive") + " svelte-1fiu7ba"));
     			attr_dev(div, "slot", "foreground");
-    			add_location(div, file$c, 44, 2, 1036);
+    			add_location(div, file$d, 87, 2, 1892);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -2120,7 +1994,7 @@ var app = (function () {
     			}
     		},
     		p: function update(ctx, dirty) {
-    			if (dirty & /*boldFirst, parts*/ 65) {
+    			if (dirty & /*boldFirst, parts, play, handlePlay, index*/ 12299) {
     				each_value = /*parts*/ ctx[0];
     				validate_each_argument(each_value);
     				let i;
@@ -2143,6 +2017,10 @@ var app = (function () {
 
     				each_blocks.length = each_value.length;
     			}
+
+    			if (dirty & /*play*/ 8 && div_class_value !== (div_class_value = "" + (null_to_empty(/*play*/ ctx[3] ? "not-interactive" : "interactive") + " svelte-1fiu7ba"))) {
+    				attr_dev(div, "class", div_class_value);
+    			}
     		},
     		d: function destroy(detaching) {
     			if (detaching) detach_dev(div);
@@ -2152,34 +2030,34 @@ var app = (function () {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_foreground_slot$1.name,
+    		id: create_foreground_slot$2.name,
     		type: "slot",
-    		source: "(45:2) ",
+    		source: "(88:2) ",
     		ctx
     	});
 
     	return block;
     }
 
-    function create_fragment$f(ctx) {
+    function create_fragment$g(ctx) {
     	let scroller;
     	let updating_index;
     	let updating_offset;
     	let current;
 
     	function scroller_index_binding(value) {
-    		/*scroller_index_binding*/ ctx[7](value);
+    		/*scroller_index_binding*/ ctx[19](value);
     	}
 
     	function scroller_offset_binding(value) {
-    		/*scroller_offset_binding*/ ctx[8](value);
+    		/*scroller_offset_binding*/ ctx[20](value);
     	}
 
     	let scroller_props = {
-    		threshold: "0",
+    		threshold: ".3",
     		$$slots: {
-    			foreground: [create_foreground_slot$1],
-    			background: [create_background_slot$1]
+    			foreground: [create_foreground_slot$2],
+    			background: [create_background_slot$2]
     		},
     		$$scope: { ctx }
     	};
@@ -2210,7 +2088,7 @@ var app = (function () {
     		p: function update(ctx, [dirty]) {
     			const scroller_changes = {};
 
-    			if (dirty & /*$$scope, parts, src, fade, poster*/ 4153) {
+    			if (dirty & /*$$scope, play, parts, index, fade, src, vidSize, muted, time, duration, video, poster*/ 134221819) {
     				scroller_changes.$$scope = { dirty, ctx };
     			}
 
@@ -2244,7 +2122,7 @@ var app = (function () {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$f.name,
+    		id: create_fragment$g.name,
     		type: "component",
     		source: "",
     		ctx
@@ -2255,26 +2133,65 @@ var app = (function () {
 
     const layout$2 = "cover absolute";
 
-    function instance$f($$self, $$props, $$invalidate) {
+    function instance$g($$self, $$props, $$invalidate) {
     	let fade;
+    	let active;
     	let src;
     	let poster;
+    	let vidSize;
+    	let muted;
     	let { $$slots: slots = {}, $$scope } = $$props;
     	validate_slots("Intro", slots, []);
     	let { parts } = $$props;
     	let index = 0;
-    	let offset;
+    	let offset, time, duration, video;
+    	let audible = true;
 
     	const boldFirst = text => {
     		const [first, ...rest] = text.split(" ");
     		return `<strong>${first}</strong> ${rest.join(" ")}`;
     	};
 
+    	let width, play = false;
+
+    	const handlePlay = () => {
+    		$$invalidate(3, play = !play);
+
+    		if (play) {
+    			$$invalidate(4, time = 0);
+    			$$invalidate(6, video.muted = false, video);
+    			$$invalidate(6, video.loop = false, video);
+    		}
+    	};
+
+    	const toggle = () => {
+    		console.log("hola!");
+    	};
+
     	const writable_props = ["parts"];
 
     	Object.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<Intro> was created with unknown prop '${key}'`);
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1.warn(`<Intro> was created with unknown prop '${key}'`);
     	});
+
+    	const click_handler = () => handlePlay();
+
+    	function video_1_timeupdate_handler() {
+    		time = this.currentTime;
+    		$$invalidate(4, time);
+    	}
+
+    	function video_1_durationchange_handler() {
+    		duration = this.duration;
+    		$$invalidate(5, duration);
+    	}
+
+    	function video_1_binding($$value) {
+    		binding_callbacks[$$value ? "unshift" : "push"](() => {
+    			video = $$value;
+    			$$invalidate(6, video);
+    		});
+    	}
 
     	function scroller_index_binding(value) {
     		index = value;
@@ -2292,25 +2209,44 @@ var app = (function () {
 
     	$$self.$capture_state = () => ({
     		Scroller,
-    		Video,
     		Photo,
     		parts,
     		index,
     		offset,
+    		time,
+    		duration,
+    		video,
     		layout: layout$2,
+    		audible,
     		boldFirst,
+    		width,
+    		play,
+    		handlePlay,
+    		toggle,
     		fade,
+    		active,
     		src,
-    		poster
+    		poster,
+    		vidSize,
+    		muted
     	});
 
     	$$self.$inject_state = $$props => {
     		if ("parts" in $$props) $$invalidate(0, parts = $$props.parts);
     		if ("index" in $$props) $$invalidate(1, index = $$props.index);
     		if ("offset" in $$props) $$invalidate(2, offset = $$props.offset);
-    		if ("fade" in $$props) $$invalidate(3, fade = $$props.fade);
-    		if ("src" in $$props) $$invalidate(4, src = $$props.src);
-    		if ("poster" in $$props) $$invalidate(5, poster = $$props.poster);
+    		if ("time" in $$props) $$invalidate(4, time = $$props.time);
+    		if ("duration" in $$props) $$invalidate(5, duration = $$props.duration);
+    		if ("video" in $$props) $$invalidate(6, video = $$props.video);
+    		if ("audible" in $$props) audible = $$props.audible;
+    		if ("width" in $$props) $$invalidate(22, width = $$props.width);
+    		if ("play" in $$props) $$invalidate(3, play = $$props.play);
+    		if ("fade" in $$props) $$invalidate(7, fade = $$props.fade);
+    		if ("active" in $$props) $$invalidate(14, active = $$props.active);
+    		if ("src" in $$props) $$invalidate(8, src = $$props.src);
+    		if ("poster" in $$props) $$invalidate(9, poster = $$props.poster);
+    		if ("vidSize" in $$props) $$invalidate(10, vidSize = $$props.vidSize);
+    		if ("muted" in $$props) $$invalidate(11, muted = $$props.muted);
     	};
 
     	if ($$props && "$$inject" in $$props) {
@@ -2319,32 +2255,56 @@ var app = (function () {
 
     	$$self.$$.update = () => {
     		if ($$self.$$.dirty & /*index, offset*/ 6) {
-    			$$invalidate(3, fade = index % 2 && offset < 0.3
+    			$$invalidate(7, fade = index % 2 && offset < 0.1
     			? "in"
-    			: index % 2 && offset > 0.7 ? "out" : "");
+    			: index % 2 && offset > 0.9 ? "out" : "");
+    		}
+
+    		if ($$self.$$.dirty & /*index*/ 2) {
+    			$$invalidate(14, active = index % 2 && index < 6);
     		}
 
     		if ($$self.$$.dirty & /*index, parts*/ 3) {
-    			$$invalidate(4, src = index < parts.length - 2
+    			$$invalidate(8, src = index < parts.length - 2
     			? parts[index].video
     			: parts[parts.length - 1].video);
     		}
 
     		if ($$self.$$.dirty & /*index, parts*/ 3) {
-    			$$invalidate(5, poster = index < parts.length - 2
+    			$$invalidate(9, poster = index < parts.length - 2
     			? parts[index].poster
     			: parts[parts.length - 1].poster);
     		}
+
+    		if ($$self.$$.dirty & /*active, play*/ 16392) {
+    			$$invalidate(11, muted = active && play ? false : "muted");
+    		}
     	};
+
+    	$$invalidate(10, vidSize = width < 854
+    	? "s"
+    	: width < 1280 ? "m" : width < 1920 ? "l" : "xl");
 
     	return [
     		parts,
     		index,
     		offset,
+    		play,
+    		time,
+    		duration,
+    		video,
     		fade,
     		src,
     		poster,
+    		vidSize,
+    		muted,
     		boldFirst,
+    		handlePlay,
+    		active,
+    		click_handler,
+    		video_1_timeupdate_handler,
+    		video_1_durationchange_handler,
+    		video_1_binding,
     		scroller_index_binding,
     		scroller_offset_binding
     	];
@@ -2353,20 +2313,20 @@ var app = (function () {
     class Intro extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$f, create_fragment$f, safe_not_equal, { parts: 0 });
+    		init(this, options, instance$g, create_fragment$g, safe_not_equal, { parts: 0 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Intro",
     			options,
-    			id: create_fragment$f.name
+    			id: create_fragment$g.name
     		});
 
     		const { ctx } = this.$$;
     		const props = options.props || {};
 
     		if (/*parts*/ ctx[0] === undefined && !("parts" in props)) {
-    			console.warn("<Intro> was created without expected prop 'parts'");
+    			console_1.warn("<Intro> was created without expected prop 'parts'");
     		}
     	}
 
@@ -2381,7 +2341,7 @@ var app = (function () {
 
     /* src/components/text/Text.svelte generated by Svelte v3.38.2 */
 
-    const file$b = "src/components/text/Text.svelte";
+    const file$c = "src/components/text/Text.svelte";
 
     function get_each_context$6(ctx, list, i) {
     	const child_ctx = ctx.slice();
@@ -2389,7 +2349,7 @@ var app = (function () {
     	return child_ctx;
     }
 
-    function get_each_context_1$2(ctx, list, i) {
+    function get_each_context_1$1(ctx, list, i) {
     	const child_ctx = ctx.slice();
     	child_ctx[7] = list[i];
     	child_ctx[9] = i;
@@ -2403,7 +2363,7 @@ var app = (function () {
     	const block = {
     		c: function create() {
     			h3 = element("h3");
-    			add_location(h3, file$b, 8, 2, 139);
+    			add_location(h3, file$c, 8, 2, 139);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, h3, anchor);
@@ -2428,14 +2388,14 @@ var app = (function () {
     }
 
     // (12:2) {#if text}
-    function create_if_block_1(ctx) {
+    function create_if_block_1$1(ctx) {
     	let each_1_anchor;
     	let each_value_1 = /*text*/ ctx[0];
     	validate_each_argument(each_value_1);
     	let each_blocks = [];
 
     	for (let i = 0; i < each_value_1.length; i += 1) {
-    		each_blocks[i] = create_each_block_1$2(get_each_context_1$2(ctx, each_value_1, i));
+    		each_blocks[i] = create_each_block_1$1(get_each_context_1$1(ctx, each_value_1, i));
     	}
 
     	const block = {
@@ -2460,12 +2420,12 @@ var app = (function () {
     				let i;
 
     				for (i = 0; i < each_value_1.length; i += 1) {
-    					const child_ctx = get_each_context_1$2(ctx, each_value_1, i);
+    					const child_ctx = get_each_context_1$1(ctx, each_value_1, i);
 
     					if (each_blocks[i]) {
     						each_blocks[i].p(child_ctx, dirty);
     					} else {
-    						each_blocks[i] = create_each_block_1$2(child_ctx);
+    						each_blocks[i] = create_each_block_1$1(child_ctx);
     						each_blocks[i].c();
     						each_blocks[i].m(each_1_anchor.parentNode, each_1_anchor);
     					}
@@ -2486,7 +2446,7 @@ var app = (function () {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block_1.name,
+    		id: create_if_block_1$1.name,
     		type: "if",
     		source: "(12:2) {#if text}",
     		ctx
@@ -2496,7 +2456,7 @@ var app = (function () {
     }
 
     // (13:2) {#each text as p,i}
-    function create_each_block_1$2(ctx) {
+    function create_each_block_1$1(ctx) {
     	let p;
     	let raw_value = /*p*/ ctx[7].p + "";
     	let p_class_value;
@@ -2509,7 +2469,7 @@ var app = (function () {
     			? "has-dropcap"
     			: "") + " svelte-14ek18h"));
 
-    			add_location(p, file$b, 13, 6, 213);
+    			add_location(p, file$c, 13, 6, 213);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, p, anchor);
@@ -2530,7 +2490,7 @@ var app = (function () {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_each_block_1$2.name,
+    		id: create_each_block_1$1.name,
     		type: "each",
     		source: "(13:2) {#each text as p,i}",
     		ctx
@@ -2540,7 +2500,7 @@ var app = (function () {
     }
 
     // (18:2) {#if list}
-    function create_if_block$4(ctx) {
+    function create_if_block$6(ctx) {
     	let ul;
     	let each_value = /*list*/ ctx[1];
     	validate_each_argument(each_value);
@@ -2558,7 +2518,7 @@ var app = (function () {
     				each_blocks[i].c();
     			}
 
-    			add_location(ul, file$b, 18, 4, 327);
+    			add_location(ul, file$c, 18, 4, 327);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, ul, anchor);
@@ -2600,7 +2560,7 @@ var app = (function () {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_if_block$4.name,
+    		id: create_if_block$6.name,
     		type: "if",
     		source: "(18:2) {#if list}",
     		ctx
@@ -2617,7 +2577,7 @@ var app = (function () {
     	const block = {
     		c: function create() {
     			li = element("li");
-    			add_location(li, file$b, 20, 6, 363);
+    			add_location(li, file$c, 20, 6, 363);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, li, anchor);
@@ -2641,13 +2601,13 @@ var app = (function () {
     	return block;
     }
 
-    function create_fragment$e(ctx) {
+    function create_fragment$f(ctx) {
     	let div;
     	let t0;
     	let t1;
     	let if_block0 = /*header*/ ctx[2] && create_if_block_2(ctx);
-    	let if_block1 = /*text*/ ctx[0] && create_if_block_1(ctx);
-    	let if_block2 = /*list*/ ctx[1] && create_if_block$4(ctx);
+    	let if_block1 = /*text*/ ctx[0] && create_if_block_1$1(ctx);
+    	let if_block2 = /*list*/ ctx[1] && create_if_block$6(ctx);
 
     	const block = {
     		c: function create() {
@@ -2658,7 +2618,7 @@ var app = (function () {
     			t1 = space();
     			if (if_block2) if_block2.c();
     			attr_dev(div, "class", "col-text");
-    			add_location(div, file$b, 6, 0, 99);
+    			add_location(div, file$c, 6, 0, 99);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -2689,7 +2649,7 @@ var app = (function () {
     				if (if_block1) {
     					if_block1.p(ctx, dirty);
     				} else {
-    					if_block1 = create_if_block_1(ctx);
+    					if_block1 = create_if_block_1$1(ctx);
     					if_block1.c();
     					if_block1.m(div, t1);
     				}
@@ -2702,7 +2662,7 @@ var app = (function () {
     				if (if_block2) {
     					if_block2.p(ctx, dirty);
     				} else {
-    					if_block2 = create_if_block$4(ctx);
+    					if_block2 = create_if_block$6(ctx);
     					if_block2.c();
     					if_block2.m(div, null);
     				}
@@ -2723,7 +2683,7 @@ var app = (function () {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$e.name,
+    		id: create_fragment$f.name,
     		type: "component",
     		source: "",
     		ctx
@@ -2732,7 +2692,7 @@ var app = (function () {
     	return block;
     }
 
-    function instance$e($$self, $$props, $$invalidate) {
+    function instance$f($$self, $$props, $$invalidate) {
     	let { $$slots: slots = {}, $$scope } = $$props;
     	validate_slots("Text", slots, []);
     	let { text } = $$props;
@@ -2771,13 +2731,13 @@ var app = (function () {
     class Text extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$e, create_fragment$e, safe_not_equal, { text: 0, list: 1, header: 2, dropcap: 3 });
+    		init(this, options, instance$f, create_fragment$f, safe_not_equal, { text: 0, list: 1, header: 2, dropcap: 3 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Text",
     			options,
-    			id: create_fragment$e.name
+    			id: create_fragment$f.name
     		});
 
     		const { ctx } = this.$$;
@@ -2829,84 +2789,673 @@ var app = (function () {
     	}
     }
 
-    /* src/components/text/Chapter.svelte generated by Svelte v3.38.2 */
-    const file$a = "src/components/text/Chapter.svelte";
+    function fade(node, { delay = 0, duration = 400, easing = identity$3 } = {}) {
+        const o = +getComputedStyle(node).opacity;
+        return {
+            delay,
+            duration,
+            easing,
+            css: t => `opacity: ${t * o}`
+        };
+    }
 
-    function create_fragment$d(ctx) {
+    /* src/components/multimedia/Video.svelte generated by Svelte v3.38.2 */
+    const file$b = "src/components/multimedia/Video.svelte";
+
+    // (48:2) {#if captions}
+    function create_if_block_1(ctx) {
+    	let track;
+    	let track_src_value;
+
+    	const block = {
+    		c: function create() {
+    			track = element("track");
+    			attr_dev(track, "kind", "captions");
+    			attr_dev(track, "label", "Catalan");
+    			attr_dev(track, "srclang", "ca");
+    			if (track.src !== (track_src_value = /*captions*/ ctx[5])) attr_dev(track, "src", track_src_value);
+    			track.default = true;
+    			add_location(track, file$b, 48, 2, 894);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, track, anchor);
+    		},
+    		p: function update(ctx, dirty) {
+    			if (dirty & /*captions*/ 32 && track.src !== (track_src_value = /*captions*/ ctx[5])) {
+    				attr_dev(track, "src", track_src_value);
+    			}
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(track);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_if_block_1.name,
+    		type: "if",
+    		source: "(48:2) {#if captions}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (53:0) {#if !play && audible}
+    function create_if_block$5(ctx) {
     	let div;
-    	let section;
-    	let video;
-    	let t;
-    	let h2;
-    	let h2_class_value;
+    	let div_transition;
     	let current;
-
-    	video = new Video({
-    			props: {
-    				src: /*src*/ ctx[0],
-    				captions: /*captions*/ ctx[2],
-    				layout: layout$1,
-    				controls: "",
-    				scroll: "false"
-    			},
-    			$$inline: true
-    		});
+    	let mounted;
+    	let dispose;
 
     	const block = {
     		c: function create() {
     			div = element("div");
-    			section = element("section");
-    			create_component(video.$$.fragment);
+    			attr_dev(div, "class", "sound svelte-pfmeda");
+    			add_location(div, file$b, 53, 0, 1011);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, div, anchor);
+    			current = true;
+
+    			if (!mounted) {
+    				dispose = listen_dev(div, "click", /*click_handler*/ ctx[17], false, false, false);
+    				mounted = true;
+    			}
+    		},
+    		p: noop,
+    		i: function intro(local) {
+    			if (current) return;
+
+    			add_render_callback(() => {
+    				if (!div_transition) div_transition = create_bidirectional_transition(div, fade, {}, true);
+    				div_transition.run(1);
+    			});
+
+    			current = true;
+    		},
+    		o: function outro(local) {
+    			if (!div_transition) div_transition = create_bidirectional_transition(div, fade, {}, false);
+    			div_transition.run(0);
+    			current = false;
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(div);
+    			if (detaching && div_transition) div_transition.end();
+    			mounted = false;
+    			dispose();
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_if_block$5.name,
+    		type: "if",
+    		source: "(53:0) {#if !play && audible}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function create_fragment$e(ctx) {
+    	let video_1;
+    	let video_1_class_value;
+    	let video_1_poster_value;
+    	let video_1_src_value;
+    	let video_1_muted_value;
+    	let video_1_controls_value;
+    	let video_1_updating = false;
+    	let video_1_animationframe;
+    	let t;
+    	let if_block1_anchor;
+    	let current;
+    	let mounted;
+    	let dispose;
+    	add_render_callback(/*onwindowresize*/ ctx[13]);
+    	let if_block0 = /*captions*/ ctx[5] && create_if_block_1(ctx);
+
+    	function video_1_timeupdate_handler() {
+    		cancelAnimationFrame(video_1_animationframe);
+
+    		if (!video_1.paused) {
+    			video_1_animationframe = raf(video_1_timeupdate_handler);
+    			video_1_updating = true;
+    		}
+
+    		/*video_1_timeupdate_handler*/ ctx[14].call(video_1);
+    	}
+
+    	let if_block1 = !/*play*/ ctx[10] && /*audible*/ ctx[3] && create_if_block$5(ctx);
+
+    	const block = {
+    		c: function create() {
+    			video_1 = element("video");
+    			if (if_block0) if_block0.c();
     			t = space();
-    			h2 = element("h2");
-    			attr_dev(h2, "class", h2_class_value = "col-text " + /*id*/ ctx[1] + " svelte-i7h489");
-    			add_location(h2, file$a, 24, 8, 549);
-    			attr_dev(section, "class", "full chapter svelte-i7h489");
-    			attr_dev(section, "id", /*id*/ ctx[1]);
-    			add_location(section, file$a, 16, 4, 344);
-    			attr_dev(div, "class", "chapter-wrapper svelte-i7h489");
-    			add_location(div, file$a, 15, 0, 310);
+    			if (if_block1) if_block1.c();
+    			if_block1_anchor = empty();
+    			attr_dev(video_1, "class", video_1_class_value = "" + (null_to_empty(/*layout*/ ctx[7]) + " svelte-pfmeda"));
+    			attr_dev(video_1, "preload", "auto");
+    			attr_dev(video_1, "poster", video_1_poster_value = "img/" + /*src*/ ctx[4] + ".jpg");
+    			if (video_1.src !== (video_1_src_value = "video/" + /*src*/ ctx[4] + "_" + /*vidSize*/ ctx[11] + ".mp4")) attr_dev(video_1, "src", video_1_src_value);
+    			video_1.muted = video_1_muted_value = /*active*/ ctx[6] && /*play*/ ctx[10] ? false : "muted";
+    			video_1.autoplay = "true";
+    			video_1.playsInline = "true";
+    			video_1.loop = "true";
+
+    			video_1.controls = video_1_controls_value = /*audible*/ ctx[3] && /*play*/ ctx[10]
+    			? /*controls*/ ctx[8]
+    			: false;
+
+    			if (/*duration*/ ctx[2] === void 0) add_render_callback(() => /*video_1_durationchange_handler*/ ctx[15].call(video_1));
+    			add_location(video_1, file$b, 33, 0, 567);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
     		m: function mount(target, anchor) {
-    			insert_dev(target, div, anchor);
-    			append_dev(div, section);
-    			mount_component(video, section, null);
-    			append_dev(section, t);
-    			append_dev(section, h2);
-    			h2.innerHTML = /*header*/ ctx[3];
-    			/*section_binding*/ ctx[6](section);
+    			insert_dev(target, video_1, anchor);
+    			if (if_block0) if_block0.m(video_1, null);
+    			/*video_1_binding*/ ctx[16](video_1);
+    			insert_dev(target, t, anchor);
+    			if (if_block1) if_block1.m(target, anchor);
+    			insert_dev(target, if_block1_anchor, anchor);
     			current = true;
+
+    			if (!mounted) {
+    				dispose = [
+    					listen_dev(window, "resize", /*onwindowresize*/ ctx[13]),
+    					listen_dev(video_1, "timeupdate", video_1_timeupdate_handler),
+    					listen_dev(video_1, "durationchange", /*video_1_durationchange_handler*/ ctx[15])
+    				];
+
+    				mounted = true;
+    			}
     		},
     		p: function update(ctx, [dirty]) {
-    			const video_changes = {};
-    			if (dirty & /*src*/ 1) video_changes.src = /*src*/ ctx[0];
-    			if (dirty & /*captions*/ 4) video_changes.captions = /*captions*/ ctx[2];
-    			video.$set(video_changes);
-    			if (!current || dirty & /*header*/ 8) h2.innerHTML = /*header*/ ctx[3];
-    			if (!current || dirty & /*id*/ 2 && h2_class_value !== (h2_class_value = "col-text " + /*id*/ ctx[1] + " svelte-i7h489")) {
-    				attr_dev(h2, "class", h2_class_value);
+    			if (/*captions*/ ctx[5]) {
+    				if (if_block0) {
+    					if_block0.p(ctx, dirty);
+    				} else {
+    					if_block0 = create_if_block_1(ctx);
+    					if_block0.c();
+    					if_block0.m(video_1, null);
+    				}
+    			} else if (if_block0) {
+    				if_block0.d(1);
+    				if_block0 = null;
     			}
 
-    			if (!current || dirty & /*id*/ 2) {
-    				attr_dev(section, "id", /*id*/ ctx[1]);
+    			if (!current || dirty & /*layout*/ 128 && video_1_class_value !== (video_1_class_value = "" + (null_to_empty(/*layout*/ ctx[7]) + " svelte-pfmeda"))) {
+    				attr_dev(video_1, "class", video_1_class_value);
+    			}
+
+    			if (!current || dirty & /*src*/ 16 && video_1_poster_value !== (video_1_poster_value = "img/" + /*src*/ ctx[4] + ".jpg")) {
+    				attr_dev(video_1, "poster", video_1_poster_value);
+    			}
+
+    			if (!current || dirty & /*src, vidSize*/ 2064 && video_1.src !== (video_1_src_value = "video/" + /*src*/ ctx[4] + "_" + /*vidSize*/ ctx[11] + ".mp4")) {
+    				attr_dev(video_1, "src", video_1_src_value);
+    			}
+
+    			if (!current || dirty & /*active, play*/ 1088 && video_1_muted_value !== (video_1_muted_value = /*active*/ ctx[6] && /*play*/ ctx[10] ? false : "muted")) {
+    				prop_dev(video_1, "muted", video_1_muted_value);
+    			}
+
+    			if (!current || dirty & /*audible, play, controls*/ 1288 && video_1_controls_value !== (video_1_controls_value = /*audible*/ ctx[3] && /*play*/ ctx[10]
+    			? /*controls*/ ctx[8]
+    			: false)) {
+    				prop_dev(video_1, "controls", video_1_controls_value);
+    			}
+
+    			if (!video_1_updating && dirty & /*time*/ 2 && !isNaN(/*time*/ ctx[1])) {
+    				video_1.currentTime = /*time*/ ctx[1];
+    			}
+
+    			video_1_updating = false;
+
+    			if (!/*play*/ ctx[10] && /*audible*/ ctx[3]) {
+    				if (if_block1) {
+    					if_block1.p(ctx, dirty);
+
+    					if (dirty & /*play, audible*/ 1032) {
+    						transition_in(if_block1, 1);
+    					}
+    				} else {
+    					if_block1 = create_if_block$5(ctx);
+    					if_block1.c();
+    					transition_in(if_block1, 1);
+    					if_block1.m(if_block1_anchor.parentNode, if_block1_anchor);
+    				}
+    			} else if (if_block1) {
+    				group_outros();
+
+    				transition_out(if_block1, 1, 1, () => {
+    					if_block1 = null;
+    				});
+
+    				check_outros();
     			}
     		},
     		i: function intro(local) {
     			if (current) return;
-    			transition_in(video.$$.fragment, local);
+    			transition_in(if_block1);
     			current = true;
     		},
     		o: function outro(local) {
-    			transition_out(video.$$.fragment, local);
+    			transition_out(if_block1);
     			current = false;
     		},
     		d: function destroy(detaching) {
-    			if (detaching) detach_dev(div);
-    			destroy_component(video);
-    			/*section_binding*/ ctx[6](null);
+    			if (detaching) detach_dev(video_1);
+    			if (if_block0) if_block0.d();
+    			/*video_1_binding*/ ctx[16](null);
+    			if (detaching) detach_dev(t);
+    			if (if_block1) if_block1.d(detaching);
+    			if (detaching) detach_dev(if_block1_anchor);
+    			mounted = false;
+    			run_all(dispose);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$e.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function instance$e($$self, $$props, $$invalidate) {
+    	let vidSize;
+    	let { $$slots: slots = {}, $$scope } = $$props;
+    	validate_slots("Video", slots, []);
+    	let { audible } = $$props;
+    	let { src } = $$props;
+    	let { video } = $$props;
+    	let { captions } = $$props;
+    	let { time } = $$props;
+    	let { active } = $$props;
+    	let { duration } = $$props;
+    	let { layout } = $$props;
+    	let { controls = "controls" } = $$props;
+    	let width, play = false;
+
+    	const handlePlay = () => {
+    		$$invalidate(1, time = 0);
+    		$$invalidate(10, play = true);
+    		$$invalidate(0, video.muted = false, video);
+    		$$invalidate(0, video.loop = false, video);
+    	};
+
+    	const writable_props = [
+    		"audible",
+    		"src",
+    		"video",
+    		"captions",
+    		"time",
+    		"active",
+    		"duration",
+    		"layout",
+    		"controls"
+    	];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<Video> was created with unknown prop '${key}'`);
+    	});
+
+    	function onwindowresize() {
+    		$$invalidate(9, width = window.innerWidth);
+    	}
+
+    	function video_1_timeupdate_handler() {
+    		time = this.currentTime;
+    		$$invalidate(1, time);
+    	}
+
+    	function video_1_durationchange_handler() {
+    		duration = this.duration;
+    		$$invalidate(2, duration);
+    	}
+
+    	function video_1_binding($$value) {
+    		binding_callbacks[$$value ? "unshift" : "push"](() => {
+    			video = $$value;
+    			$$invalidate(0, video);
+    		});
+    	}
+
+    	const click_handler = () => handlePlay();
+
+    	$$self.$$set = $$props => {
+    		if ("audible" in $$props) $$invalidate(3, audible = $$props.audible);
+    		if ("src" in $$props) $$invalidate(4, src = $$props.src);
+    		if ("video" in $$props) $$invalidate(0, video = $$props.video);
+    		if ("captions" in $$props) $$invalidate(5, captions = $$props.captions);
+    		if ("time" in $$props) $$invalidate(1, time = $$props.time);
+    		if ("active" in $$props) $$invalidate(6, active = $$props.active);
+    		if ("duration" in $$props) $$invalidate(2, duration = $$props.duration);
+    		if ("layout" in $$props) $$invalidate(7, layout = $$props.layout);
+    		if ("controls" in $$props) $$invalidate(8, controls = $$props.controls);
+    	};
+
+    	$$self.$capture_state = () => ({
+    		fade,
+    		audible,
+    		src,
+    		video,
+    		captions,
+    		time,
+    		active,
+    		duration,
+    		layout,
+    		controls,
+    		width,
+    		play,
+    		handlePlay,
+    		vidSize
+    	});
+
+    	$$self.$inject_state = $$props => {
+    		if ("audible" in $$props) $$invalidate(3, audible = $$props.audible);
+    		if ("src" in $$props) $$invalidate(4, src = $$props.src);
+    		if ("video" in $$props) $$invalidate(0, video = $$props.video);
+    		if ("captions" in $$props) $$invalidate(5, captions = $$props.captions);
+    		if ("time" in $$props) $$invalidate(1, time = $$props.time);
+    		if ("active" in $$props) $$invalidate(6, active = $$props.active);
+    		if ("duration" in $$props) $$invalidate(2, duration = $$props.duration);
+    		if ("layout" in $$props) $$invalidate(7, layout = $$props.layout);
+    		if ("controls" in $$props) $$invalidate(8, controls = $$props.controls);
+    		if ("width" in $$props) $$invalidate(9, width = $$props.width);
+    		if ("play" in $$props) $$invalidate(10, play = $$props.play);
+    		if ("vidSize" in $$props) $$invalidate(11, vidSize = $$props.vidSize);
+    	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
+
+    	$$self.$$.update = () => {
+    		if ($$self.$$.dirty & /*width*/ 512) {
+    			$$invalidate(11, vidSize = width < 854
+    			? "s"
+    			: width < 1280 ? "m" : width < 1920 ? "l" : "xl");
+    		}
+    	};
+
+    	return [
+    		video,
+    		time,
+    		duration,
+    		audible,
+    		src,
+    		captions,
+    		active,
+    		layout,
+    		controls,
+    		width,
+    		play,
+    		vidSize,
+    		handlePlay,
+    		onwindowresize,
+    		video_1_timeupdate_handler,
+    		video_1_durationchange_handler,
+    		video_1_binding,
+    		click_handler
+    	];
+    }
+
+    class Video extends SvelteComponentDev {
+    	constructor(options) {
+    		super(options);
+
+    		init(this, options, instance$e, create_fragment$e, safe_not_equal, {
+    			audible: 3,
+    			src: 4,
+    			video: 0,
+    			captions: 5,
+    			time: 1,
+    			active: 6,
+    			duration: 2,
+    			layout: 7,
+    			controls: 8
+    		});
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "Video",
+    			options,
+    			id: create_fragment$e.name
+    		});
+
+    		const { ctx } = this.$$;
+    		const props = options.props || {};
+
+    		if (/*audible*/ ctx[3] === undefined && !("audible" in props)) {
+    			console.warn("<Video> was created without expected prop 'audible'");
+    		}
+
+    		if (/*src*/ ctx[4] === undefined && !("src" in props)) {
+    			console.warn("<Video> was created without expected prop 'src'");
+    		}
+
+    		if (/*video*/ ctx[0] === undefined && !("video" in props)) {
+    			console.warn("<Video> was created without expected prop 'video'");
+    		}
+
+    		if (/*captions*/ ctx[5] === undefined && !("captions" in props)) {
+    			console.warn("<Video> was created without expected prop 'captions'");
+    		}
+
+    		if (/*time*/ ctx[1] === undefined && !("time" in props)) {
+    			console.warn("<Video> was created without expected prop 'time'");
+    		}
+
+    		if (/*active*/ ctx[6] === undefined && !("active" in props)) {
+    			console.warn("<Video> was created without expected prop 'active'");
+    		}
+
+    		if (/*duration*/ ctx[2] === undefined && !("duration" in props)) {
+    			console.warn("<Video> was created without expected prop 'duration'");
+    		}
+
+    		if (/*layout*/ ctx[7] === undefined && !("layout" in props)) {
+    			console.warn("<Video> was created without expected prop 'layout'");
+    		}
+    	}
+
+    	get audible() {
+    		throw new Error("<Video>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set audible(value) {
+    		throw new Error("<Video>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	get src() {
+    		throw new Error("<Video>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set src(value) {
+    		throw new Error("<Video>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	get video() {
+    		throw new Error("<Video>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set video(value) {
+    		throw new Error("<Video>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	get captions() {
+    		throw new Error("<Video>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set captions(value) {
+    		throw new Error("<Video>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	get time() {
+    		throw new Error("<Video>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set time(value) {
+    		throw new Error("<Video>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	get active() {
+    		throw new Error("<Video>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set active(value) {
+    		throw new Error("<Video>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	get duration() {
+    		throw new Error("<Video>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set duration(value) {
+    		throw new Error("<Video>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	get layout() {
+    		throw new Error("<Video>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set layout(value) {
+    		throw new Error("<Video>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	get controls() {
+    		throw new Error("<Video>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set controls(value) {
+    		throw new Error("<Video>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+    }
+
+    /* src/components/text/Chapter.svelte generated by Svelte v3.38.2 */
+    const file$a = "src/components/text/Chapter.svelte";
+
+    // (18:8) {#if id !== 'ara'}
+    function create_if_block$4(ctx) {
+    	let img;
+    	let img_src_value;
+
+    	const block = {
+    		c: function create() {
+    			img = element("img");
+    			attr_dev(img, "class", "full svelte-15gqpwt");
+    			if (img.src !== (img_src_value = "img/" + /*src*/ ctx[0] + ".gif")) attr_dev(img, "src", img_src_value);
+    			attr_dev(img, "alt", "");
+    			add_location(img, file$a, 17, 26, 482);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, img, anchor);
+    		},
+    		p: function update(ctx, dirty) {
+    			if (dirty & /*src*/ 1 && img.src !== (img_src_value = "img/" + /*src*/ ctx[0] + ".gif")) {
+    				attr_dev(img, "src", img_src_value);
+    			}
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(img);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_if_block$4.name,
+    		type: "if",
+    		source: "(18:8) {#if id !== 'ara'}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function create_fragment$d(ctx) {
+    	let div1;
+    	let section;
+    	let t;
+    	let div0;
+    	let h2;
+    	let section_class_value;
+    	let div1_class_value;
+    	let if_block = /*id*/ ctx[1] !== "ara" && create_if_block$4(ctx);
+
+    	const block = {
+    		c: function create() {
+    			div1 = element("div");
+    			section = element("section");
+    			if (if_block) if_block.c();
+    			t = space();
+    			div0 = element("div");
+    			h2 = element("h2");
+    			attr_dev(h2, "class", "col-text");
+    			add_location(h2, file$a, 18, 36, 571);
+    			attr_dev(div0, "class", "header-wrapper svelte-15gqpwt");
+    			add_location(div0, file$a, 18, 8, 543);
+    			attr_dev(section, "class", section_class_value = "full chapter " + (/*id*/ ctx[1] !== "ara" ? "" : "short") + " svelte-15gqpwt");
+    			attr_dev(section, "id", /*id*/ ctx[1]);
+    			add_location(section, file$a, 16, 4, 370);
+    			attr_dev(div1, "class", div1_class_value = "" + (null_to_empty(/*id*/ ctx[1] !== "ara" ? "chapter-wrapper" : "short") + " svelte-15gqpwt"));
+    			add_location(div1, file$a, 15, 0, 307);
+    		},
+    		l: function claim(nodes) {
+    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, div1, anchor);
+    			append_dev(div1, section);
+    			if (if_block) if_block.m(section, null);
+    			append_dev(section, t);
+    			append_dev(section, div0);
+    			append_dev(div0, h2);
+    			h2.innerHTML = /*header*/ ctx[2];
+    			/*section_binding*/ ctx[5](section);
+    		},
+    		p: function update(ctx, [dirty]) {
+    			if (/*id*/ ctx[1] !== "ara") {
+    				if (if_block) {
+    					if_block.p(ctx, dirty);
+    				} else {
+    					if_block = create_if_block$4(ctx);
+    					if_block.c();
+    					if_block.m(section, t);
+    				}
+    			} else if (if_block) {
+    				if_block.d(1);
+    				if_block = null;
+    			}
+
+    			if (dirty & /*header*/ 4) h2.innerHTML = /*header*/ ctx[2];
+    			if (dirty & /*id*/ 2 && section_class_value !== (section_class_value = "full chapter " + (/*id*/ ctx[1] !== "ara" ? "" : "short") + " svelte-15gqpwt")) {
+    				attr_dev(section, "class", section_class_value);
+    			}
+
+    			if (dirty & /*id*/ 2) {
+    				attr_dev(section, "id", /*id*/ ctx[1]);
+    			}
+
+    			if (dirty & /*id*/ 2 && div1_class_value !== (div1_class_value = "" + (null_to_empty(/*id*/ ctx[1] !== "ara" ? "chapter-wrapper" : "short") + " svelte-15gqpwt"))) {
+    				attr_dev(div1, "class", div1_class_value);
+    			}
+    		},
+    		i: noop,
+    		o: noop,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(div1);
+    			if (if_block) if_block.d();
+    			/*section_binding*/ ctx[5](null);
     		}
     	};
 
@@ -2921,7 +3470,8 @@ var app = (function () {
     	return block;
     }
 
-    const layout$1 = "cover";
+    const layout$1 = "";
+    const audible$2 = false;
 
     function instance$d($$self, $$props, $$invalidate) {
     	let { $$slots: slots = {}, $$scope } = $$props;
@@ -2929,10 +3479,9 @@ var app = (function () {
     	let { src } = $$props;
     	let { id } = $$props;
     	let { chapter } = $$props;
-    	let { captions } = $$props;
     	let { header } = $$props;
     	let pos, element;
-    	const writable_props = ["src", "id", "chapter", "captions", "header"];
+    	const writable_props = ["src", "id", "chapter", "header"];
 
     	Object.keys($$props).forEach(key => {
     		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<Chapter> was created with unknown prop '${key}'`);
@@ -2941,16 +3490,15 @@ var app = (function () {
     	function section_binding($$value) {
     		binding_callbacks[$$value ? "unshift" : "push"](() => {
     			element = $$value;
-    			$$invalidate(4, element);
+    			$$invalidate(3, element);
     		});
     	}
 
     	$$self.$$set = $$props => {
     		if ("src" in $$props) $$invalidate(0, src = $$props.src);
     		if ("id" in $$props) $$invalidate(1, id = $$props.id);
-    		if ("chapter" in $$props) $$invalidate(5, chapter = $$props.chapter);
-    		if ("captions" in $$props) $$invalidate(2, captions = $$props.captions);
-    		if ("header" in $$props) $$invalidate(3, header = $$props.header);
+    		if ("chapter" in $$props) $$invalidate(4, chapter = $$props.chapter);
+    		if ("header" in $$props) $$invalidate(2, header = $$props.header);
     	};
 
     	$$self.$capture_state = () => ({
@@ -2958,21 +3506,20 @@ var app = (function () {
     		src,
     		id,
     		chapter,
-    		captions,
     		header,
     		layout: layout$1,
     		pos,
-    		element
+    		element,
+    		audible: audible$2
     	});
 
     	$$self.$inject_state = $$props => {
     		if ("src" in $$props) $$invalidate(0, src = $$props.src);
     		if ("id" in $$props) $$invalidate(1, id = $$props.id);
-    		if ("chapter" in $$props) $$invalidate(5, chapter = $$props.chapter);
-    		if ("captions" in $$props) $$invalidate(2, captions = $$props.captions);
-    		if ("header" in $$props) $$invalidate(3, header = $$props.header);
+    		if ("chapter" in $$props) $$invalidate(4, chapter = $$props.chapter);
+    		if ("header" in $$props) $$invalidate(2, header = $$props.header);
     		if ("pos" in $$props) pos = $$props.pos;
-    		if ("element" in $$props) $$invalidate(4, element = $$props.element);
+    		if ("element" in $$props) $$invalidate(3, element = $$props.element);
     	};
 
     	if ($$props && "$$inject" in $$props) {
@@ -2980,25 +3527,18 @@ var app = (function () {
     	}
 
     	$$self.$$.update = () => {
-    		if ($$self.$$.dirty & /*element, id*/ 18) {
-    			if (element) $$invalidate(5, chapter[id] = { pos: element.offsetTop, id: element.id }, chapter);
+    		if ($$self.$$.dirty & /*element, id*/ 10) {
+    			if (element) $$invalidate(4, chapter[id] = { pos: element.offsetTop, id: element.id }, chapter);
     		}
     	};
 
-    	return [src, id, captions, header, element, chapter, section_binding];
+    	return [src, id, header, element, chapter, section_binding];
     }
 
     class Chapter extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-
-    		init(this, options, instance$d, create_fragment$d, safe_not_equal, {
-    			src: 0,
-    			id: 1,
-    			chapter: 5,
-    			captions: 2,
-    			header: 3
-    		});
+    		init(this, options, instance$d, create_fragment$d, safe_not_equal, { src: 0, id: 1, chapter: 4, header: 2 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -3018,15 +3558,11 @@ var app = (function () {
     			console.warn("<Chapter> was created without expected prop 'id'");
     		}
 
-    		if (/*chapter*/ ctx[5] === undefined && !("chapter" in props)) {
+    		if (/*chapter*/ ctx[4] === undefined && !("chapter" in props)) {
     			console.warn("<Chapter> was created without expected prop 'chapter'");
     		}
 
-    		if (/*captions*/ ctx[2] === undefined && !("captions" in props)) {
-    			console.warn("<Chapter> was created without expected prop 'captions'");
-    		}
-
-    		if (/*header*/ ctx[3] === undefined && !("header" in props)) {
+    		if (/*header*/ ctx[2] === undefined && !("header" in props)) {
     			console.warn("<Chapter> was created without expected prop 'header'");
     		}
     	}
@@ -3052,14 +3588,6 @@ var app = (function () {
     	}
 
     	set chapter(value) {
-    		throw new Error("<Chapter>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	get captions() {
-    		throw new Error("<Chapter>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	set captions(value) {
     		throw new Error("<Chapter>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
     	}
 
@@ -3349,7 +3877,7 @@ var app = (function () {
     /* src/components/multimedia/ChapterVideo.svelte generated by Svelte v3.38.2 */
     const file$9 = "src/components/multimedia/ChapterVideo.svelte";
 
-    // (18:0) <IntersectionObserver {element} bind:intersecting threshold=.7>
+    // (19:0) <IntersectionObserver {element} bind:intersecting threshold=.7>
     function create_default_slot$2(ctx) {
     	let section;
     	let video;
@@ -3361,7 +3889,8 @@ var app = (function () {
     				captions: /*captions*/ ctx[2],
     				layout,
     				controls: "",
-    				scroll: "false"
+    				scroll: "false",
+    				audible: audible$1
     			},
     			$$inline: true
     		});
@@ -3372,7 +3901,7 @@ var app = (function () {
     			create_component(video.$$.fragment);
     			attr_dev(section, "class", "full chapter");
     			attr_dev(section, "id", /*id*/ ctx[1]);
-    			add_location(section, file$9, 18, 0, 391);
+    			add_location(section, file$9, 19, 0, 418);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, section, anchor);
@@ -3410,7 +3939,7 @@ var app = (function () {
     		block,
     		id: create_default_slot$2.name,
     		type: "slot",
-    		source: "(18:0) <IntersectionObserver {element} bind:intersecting threshold=.7>",
+    		source: "(19:0) <IntersectionObserver {element} bind:intersecting threshold=.7>",
     		ctx
     	});
 
@@ -3497,6 +4026,7 @@ var app = (function () {
     }
 
     const layout = "cover";
+    const audible$1 = false;
 
     function instance$b($$self, $$props, $$invalidate) {
     	let { $$slots: slots = {}, $$scope } = $$props;
@@ -3540,6 +4070,7 @@ var app = (function () {
     		captions,
     		color,
     		layout,
+    		audible: audible$1,
     		element,
     		intersecting
     	});
@@ -3643,9 +4174,102 @@ var app = (function () {
     /* src/components/multimedia/InterviewVideo.svelte generated by Svelte v3.38.2 */
     const file$8 = "src/components/multimedia/InterviewVideo.svelte";
 
-    // (17:0) <IntersectionObserver {element} bind:intersecting threshold=.5>
-    function create_default_slot$1(ctx) {
+    // (34:4) {:else}
+    function create_else_block$1(ctx) {
+    	let scroller;
+    	let updating_index;
+    	let updating_offset;
+    	let current;
+
+    	function scroller_index_binding(value) {
+    		/*scroller_index_binding*/ ctx[13](value);
+    	}
+
+    	function scroller_offset_binding(value) {
+    		/*scroller_offset_binding*/ ctx[14](value);
+    	}
+
+    	let scroller_props = {
+    		threshold: ".3",
+    		$$slots: {
+    			background: [create_background_slot$1],
+    			foreground: [create_foreground_slot$1]
+    		},
+    		$$scope: { ctx }
+    	};
+
+    	if (/*index*/ ctx[6] !== void 0) {
+    		scroller_props.index = /*index*/ ctx[6];
+    	}
+
+    	if (/*offset*/ ctx[7] !== void 0) {
+    		scroller_props.offset = /*offset*/ ctx[7];
+    	}
+
+    	scroller = new Scroller({ props: scroller_props, $$inline: true });
+    	binding_callbacks.push(() => bind(scroller, "index", scroller_index_binding));
+    	binding_callbacks.push(() => bind(scroller, "offset", scroller_offset_binding));
+
+    	const block = {
+    		c: function create() {
+    			create_component(scroller.$$.fragment);
+    		},
+    		m: function mount(target, anchor) {
+    			mount_component(scroller, target, anchor);
+    			current = true;
+    		},
+    		p: function update(ctx, dirty) {
+    			const scroller_changes = {};
+
+    			if (dirty & /*$$scope, src, captions, intersecting, id, element, header*/ 65847) {
+    				scroller_changes.$$scope = { dirty, ctx };
+    			}
+
+    			if (!updating_index && dirty & /*index*/ 64) {
+    				updating_index = true;
+    				scroller_changes.index = /*index*/ ctx[6];
+    				add_flush_callback(() => updating_index = false);
+    			}
+
+    			if (!updating_offset && dirty & /*offset*/ 128) {
+    				updating_offset = true;
+    				scroller_changes.offset = /*offset*/ ctx[7];
+    				add_flush_callback(() => updating_offset = false);
+    			}
+
+    			scroller.$set(scroller_changes);
+    		},
+    		i: function intro(local) {
+    			if (current) return;
+    			transition_in(scroller.$$.fragment, local);
+    			current = true;
+    		},
+    		o: function outro(local) {
+    			transition_out(scroller.$$.fragment, local);
+    			current = false;
+    		},
+    		d: function destroy(detaching) {
+    			destroy_component(scroller, detaching);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_else_block$1.name,
+    		type: "else",
+    		source: "(34:4) {:else}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    // (21:4) {#if size === 'small'}
+    function create_if_block$3(ctx) {
     	let section_1;
+    	let h4;
+    	let t0;
+    	let t1;
     	let video;
     	let section_1_class_value;
     	let current;
@@ -3654,9 +4278,11 @@ var app = (function () {
     			props: {
     				src: /*src*/ ctx[0],
     				captions: /*captions*/ ctx[2],
-    				layout: /*layout*/ ctx[5],
+    				layout: /*layout*/ ctx[9],
     				controls: "controls",
-    				scroll: "false"
+    				scroll: "false",
+    				active: /*intersecting*/ ctx[8],
+    				audible
     			},
     			$$inline: true
     		});
@@ -3664,24 +4290,34 @@ var app = (function () {
     	const block = {
     		c: function create() {
     			section_1 = element("section");
+    			h4 = element("h4");
+    			t0 = text(/*header*/ ctx[4]);
+    			t1 = space();
     			create_component(video.$$.fragment);
-    			attr_dev(section_1, "class", section_1_class_value = "" + (/*section*/ ctx[6] + " interview " + (/*intersecting*/ ctx[4] ? "visible" : "invisible") + " svelte-1pqq2jn"));
+    			attr_dev(h4, "class", "title svelte-hsu2qo");
+    			add_location(h4, file$8, 22, 8, 711);
+    			attr_dev(section_1, "class", section_1_class_value = "" + (/*section*/ ctx[10] + " interview " + (/*intersecting*/ ctx[8] ? "visible" : "invisible") + " svelte-hsu2qo"));
     			attr_dev(section_1, "id", /*id*/ ctx[1]);
-    			add_location(section_1, file$8, 17, 0, 451);
+    			add_location(section_1, file$8, 21, 4, 599);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, section_1, anchor);
+    			append_dev(section_1, h4);
+    			append_dev(h4, t0);
+    			append_dev(section_1, t1);
     			mount_component(video, section_1, null);
-    			/*section_1_binding*/ ctx[8](section_1);
+    			/*section_1_binding*/ ctx[11](section_1);
     			current = true;
     		},
     		p: function update(ctx, dirty) {
+    			if (!current || dirty & /*header*/ 16) set_data_dev(t0, /*header*/ ctx[4]);
     			const video_changes = {};
     			if (dirty & /*src*/ 1) video_changes.src = /*src*/ ctx[0];
     			if (dirty & /*captions*/ 4) video_changes.captions = /*captions*/ ctx[2];
+    			if (dirty & /*intersecting*/ 256) video_changes.active = /*intersecting*/ ctx[8];
     			video.$set(video_changes);
 
-    			if (!current || dirty & /*intersecting*/ 16 && section_1_class_value !== (section_1_class_value = "" + (/*section*/ ctx[6] + " interview " + (/*intersecting*/ ctx[4] ? "visible" : "invisible") + " svelte-1pqq2jn"))) {
+    			if (!current || dirty & /*intersecting*/ 256 && section_1_class_value !== (section_1_class_value = "" + (/*section*/ ctx[10] + " interview " + (/*intersecting*/ ctx[8] ? "visible" : "invisible") + " svelte-hsu2qo"))) {
     				attr_dev(section_1, "class", section_1_class_value);
     			}
 
@@ -3701,472 +4337,7 @@ var app = (function () {
     		d: function destroy(detaching) {
     			if (detaching) detach_dev(section_1);
     			destroy_component(video);
-    			/*section_1_binding*/ ctx[8](null);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_default_slot$1.name,
-    		type: "slot",
-    		source: "(17:0) <IntersectionObserver {element} bind:intersecting threshold=.5>",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    function create_fragment$a(ctx) {
-    	let intersectionobserver;
-    	let updating_intersecting;
-    	let current;
-
-    	function intersectionobserver_intersecting_binding(value) {
-    		/*intersectionobserver_intersecting_binding*/ ctx[9](value);
-    	}
-
-    	let intersectionobserver_props = {
-    		element: /*element*/ ctx[3],
-    		threshold: ".5",
-    		$$slots: { default: [create_default_slot$1] },
-    		$$scope: { ctx }
-    	};
-
-    	if (/*intersecting*/ ctx[4] !== void 0) {
-    		intersectionobserver_props.intersecting = /*intersecting*/ ctx[4];
-    	}
-
-    	intersectionobserver = new IntersectionObserver_1({
-    			props: intersectionobserver_props,
-    			$$inline: true
-    		});
-
-    	binding_callbacks.push(() => bind(intersectionobserver, "intersecting", intersectionobserver_intersecting_binding));
-
-    	const block = {
-    		c: function create() {
-    			create_component(intersectionobserver.$$.fragment);
-    		},
-    		l: function claim(nodes) {
-    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
-    		},
-    		m: function mount(target, anchor) {
-    			mount_component(intersectionobserver, target, anchor);
-    			current = true;
-    		},
-    		p: function update(ctx, [dirty]) {
-    			const intersectionobserver_changes = {};
-    			if (dirty & /*element*/ 8) intersectionobserver_changes.element = /*element*/ ctx[3];
-
-    			if (dirty & /*$$scope, intersecting, id, element, src, captions*/ 1055) {
-    				intersectionobserver_changes.$$scope = { dirty, ctx };
-    			}
-
-    			if (!updating_intersecting && dirty & /*intersecting*/ 16) {
-    				updating_intersecting = true;
-    				intersectionobserver_changes.intersecting = /*intersecting*/ ctx[4];
-    				add_flush_callback(() => updating_intersecting = false);
-    			}
-
-    			intersectionobserver.$set(intersectionobserver_changes);
-    		},
-    		i: function intro(local) {
-    			if (current) return;
-    			transition_in(intersectionobserver.$$.fragment, local);
-    			current = true;
-    		},
-    		o: function outro(local) {
-    			transition_out(intersectionobserver.$$.fragment, local);
-    			current = false;
-    		},
-    		d: function destroy(detaching) {
-    			destroy_component(intersectionobserver, detaching);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_fragment$a.name,
-    		type: "component",
-    		source: "",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    function instance$a($$self, $$props, $$invalidate) {
-    	let { $$slots: slots = {}, $$scope } = $$props;
-    	validate_slots("InterviewVideo", slots, []);
-    	let { src } = $$props;
-    	let { id } = $$props;
-    	let { captions } = $$props;
-    	let { size } = $$props;
-    	const layout = size === "small" ? "col-text" : "cover";
-    	const section = size === "small" ? "col-text" : "full chapter";
-    	let element;
-    	let intersecting;
-    	const writable_props = ["src", "id", "captions", "size"];
-
-    	Object.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<InterviewVideo> was created with unknown prop '${key}'`);
-    	});
-
-    	function section_1_binding($$value) {
-    		binding_callbacks[$$value ? "unshift" : "push"](() => {
-    			element = $$value;
-    			$$invalidate(3, element);
-    		});
-    	}
-
-    	function intersectionobserver_intersecting_binding(value) {
-    		intersecting = value;
-    		$$invalidate(4, intersecting);
-    	}
-
-    	$$self.$$set = $$props => {
-    		if ("src" in $$props) $$invalidate(0, src = $$props.src);
-    		if ("id" in $$props) $$invalidate(1, id = $$props.id);
-    		if ("captions" in $$props) $$invalidate(2, captions = $$props.captions);
-    		if ("size" in $$props) $$invalidate(7, size = $$props.size);
-    	};
-
-    	$$self.$capture_state = () => ({
-    		IntersectionObserver: IntersectionObserver_1,
-    		Video,
-    		src,
-    		id,
-    		captions,
-    		size,
-    		layout,
-    		section,
-    		element,
-    		intersecting
-    	});
-
-    	$$self.$inject_state = $$props => {
-    		if ("src" in $$props) $$invalidate(0, src = $$props.src);
-    		if ("id" in $$props) $$invalidate(1, id = $$props.id);
-    		if ("captions" in $$props) $$invalidate(2, captions = $$props.captions);
-    		if ("size" in $$props) $$invalidate(7, size = $$props.size);
-    		if ("element" in $$props) $$invalidate(3, element = $$props.element);
-    		if ("intersecting" in $$props) $$invalidate(4, intersecting = $$props.intersecting);
-    	};
-
-    	if ($$props && "$$inject" in $$props) {
-    		$$self.$inject_state($$props.$$inject);
-    	}
-
-    	return [
-    		src,
-    		id,
-    		captions,
-    		element,
-    		intersecting,
-    		layout,
-    		section,
-    		size,
-    		section_1_binding,
-    		intersectionobserver_intersecting_binding
-    	];
-    }
-
-    class InterviewVideo extends SvelteComponentDev {
-    	constructor(options) {
-    		super(options);
-    		init(this, options, instance$a, create_fragment$a, safe_not_equal, { src: 0, id: 1, captions: 2, size: 7 });
-
-    		dispatch_dev("SvelteRegisterComponent", {
-    			component: this,
-    			tagName: "InterviewVideo",
-    			options,
-    			id: create_fragment$a.name
-    		});
-
-    		const { ctx } = this.$$;
-    		const props = options.props || {};
-
-    		if (/*src*/ ctx[0] === undefined && !("src" in props)) {
-    			console.warn("<InterviewVideo> was created without expected prop 'src'");
-    		}
-
-    		if (/*id*/ ctx[1] === undefined && !("id" in props)) {
-    			console.warn("<InterviewVideo> was created without expected prop 'id'");
-    		}
-
-    		if (/*captions*/ ctx[2] === undefined && !("captions" in props)) {
-    			console.warn("<InterviewVideo> was created without expected prop 'captions'");
-    		}
-
-    		if (/*size*/ ctx[7] === undefined && !("size" in props)) {
-    			console.warn("<InterviewVideo> was created without expected prop 'size'");
-    		}
-    	}
-
-    	get src() {
-    		throw new Error("<InterviewVideo>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	set src(value) {
-    		throw new Error("<InterviewVideo>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	get id() {
-    		throw new Error("<InterviewVideo>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	set id(value) {
-    		throw new Error("<InterviewVideo>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	get captions() {
-    		throw new Error("<InterviewVideo>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	set captions(value) {
-    		throw new Error("<InterviewVideo>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	get size() {
-    		throw new Error("<InterviewVideo>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	set size(value) {
-    		throw new Error("<InterviewVideo>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-    }
-
-    /* src/components/text/Notes.svelte generated by Svelte v3.38.2 */
-    const file$7 = "src/components/text/Notes.svelte";
-
-    function get_each_context_1$1(ctx, list, i) {
-    	const child_ctx = ctx.slice();
-    	child_ctx[8] = list[i];
-    	return child_ctx;
-    }
-
-    function get_each_context$5(ctx, list, i) {
-    	const child_ctx = ctx.slice();
-    	child_ctx[8] = list[i];
-    	return child_ctx;
-    }
-
-    // (28:0) {:else}
-    function create_else_block$1(ctx) {
-    	let section;
-    	let text_1;
-    	let t;
-    	let ul;
-    	let section_class_value;
-    	let current;
-
-    	text_1 = new Text({
-    			props: {
-    				text: /*text*/ ctx[0],
-    				header: /*header*/ ctx[1],
-    				dropcap: "false"
-    			},
-    			$$inline: true
-    		});
-
-    	let each_value_1 = /*list*/ ctx[2];
-    	validate_each_argument(each_value_1);
-    	let each_blocks = [];
-
-    	for (let i = 0; i < each_value_1.length; i += 1) {
-    		each_blocks[i] = create_each_block_1$1(get_each_context_1$1(ctx, each_value_1, i));
-    	}
-
-    	const block = {
-    		c: function create() {
-    			section = element("section");
-    			create_component(text_1.$$.fragment);
-    			t = space();
-    			ul = element("ul");
-
-    			for (let i = 0; i < each_blocks.length; i += 1) {
-    				each_blocks[i].c();
-    			}
-
-    			add_location(ul, file$7, 34, 4, 633);
-    			attr_dev(section, "class", section_class_value = "col-text " + /*id*/ ctx[3] + " svelte-1jxmio7");
-    			add_location(section, file$7, 28, 0, 523);
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, section, anchor);
-    			mount_component(text_1, section, null);
-    			append_dev(section, t);
-    			append_dev(section, ul);
-
-    			for (let i = 0; i < each_blocks.length; i += 1) {
-    				each_blocks[i].m(ul, null);
-    			}
-
-    			current = true;
-    		},
-    		p: function update(ctx, dirty) {
-    			const text_1_changes = {};
-    			if (dirty & /*text*/ 1) text_1_changes.text = /*text*/ ctx[0];
-    			if (dirty & /*header*/ 2) text_1_changes.header = /*header*/ ctx[1];
-    			text_1.$set(text_1_changes);
-
-    			if (dirty & /*list*/ 4) {
-    				each_value_1 = /*list*/ ctx[2];
-    				validate_each_argument(each_value_1);
-    				let i;
-
-    				for (i = 0; i < each_value_1.length; i += 1) {
-    					const child_ctx = get_each_context_1$1(ctx, each_value_1, i);
-
-    					if (each_blocks[i]) {
-    						each_blocks[i].p(child_ctx, dirty);
-    					} else {
-    						each_blocks[i] = create_each_block_1$1(child_ctx);
-    						each_blocks[i].c();
-    						each_blocks[i].m(ul, null);
-    					}
-    				}
-
-    				for (; i < each_blocks.length; i += 1) {
-    					each_blocks[i].d(1);
-    				}
-
-    				each_blocks.length = each_value_1.length;
-    			}
-
-    			if (!current || dirty & /*id*/ 8 && section_class_value !== (section_class_value = "col-text " + /*id*/ ctx[3] + " svelte-1jxmio7")) {
-    				attr_dev(section, "class", section_class_value);
-    			}
-    		},
-    		i: function intro(local) {
-    			if (current) return;
-    			transition_in(text_1.$$.fragment, local);
-    			current = true;
-    		},
-    		o: function outro(local) {
-    			transition_out(text_1.$$.fragment, local);
-    			current = false;
-    		},
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(section);
-    			destroy_component(text_1);
-    			destroy_each(each_blocks, detaching);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_else_block$1.name,
-    		type: "else",
-    		source: "(28:0) {:else}",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    // (14:0) {#if id !== 'thanks'}
-    function create_if_block$3(ctx) {
-    	let section;
-    	let text_1;
-    	let t;
-    	let ul;
-    	let current;
-
-    	text_1 = new Text({
-    			props: {
-    				text: /*text*/ ctx[0],
-    				header: /*header*/ ctx[1],
-    				dropcap: "false"
-    			},
-    			$$inline: true
-    		});
-
-    	let each_value = /*list*/ ctx[2];
-    	validate_each_argument(each_value);
-    	let each_blocks = [];
-
-    	for (let i = 0; i < each_value.length; i += 1) {
-    		each_blocks[i] = create_each_block$5(get_each_context$5(ctx, each_value, i));
-    	}
-
-    	const block = {
-    		c: function create() {
-    			section = element("section");
-    			create_component(text_1.$$.fragment);
-    			t = space();
-    			ul = element("ul");
-
-    			for (let i = 0; i < each_blocks.length; i += 1) {
-    				each_blocks[i].c();
-    			}
-
-    			add_location(ul, file$7, 20, 4, 417);
-    			attr_dev(section, "class", "col-text svelte-1jxmio7");
-    			attr_dev(section, "id", /*id*/ ctx[3]);
-    			add_location(section, file$7, 14, 0, 287);
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, section, anchor);
-    			mount_component(text_1, section, null);
-    			append_dev(section, t);
-    			append_dev(section, ul);
-
-    			for (let i = 0; i < each_blocks.length; i += 1) {
-    				each_blocks[i].m(ul, null);
-    			}
-
-    			/*section_binding*/ ctx[6](section);
-    			current = true;
-    		},
-    		p: function update(ctx, dirty) {
-    			const text_1_changes = {};
-    			if (dirty & /*text*/ 1) text_1_changes.text = /*text*/ ctx[0];
-    			if (dirty & /*header*/ 2) text_1_changes.header = /*header*/ ctx[1];
-    			text_1.$set(text_1_changes);
-
-    			if (dirty & /*list*/ 4) {
-    				each_value = /*list*/ ctx[2];
-    				validate_each_argument(each_value);
-    				let i;
-
-    				for (i = 0; i < each_value.length; i += 1) {
-    					const child_ctx = get_each_context$5(ctx, each_value, i);
-
-    					if (each_blocks[i]) {
-    						each_blocks[i].p(child_ctx, dirty);
-    					} else {
-    						each_blocks[i] = create_each_block$5(child_ctx);
-    						each_blocks[i].c();
-    						each_blocks[i].m(ul, null);
-    					}
-    				}
-
-    				for (; i < each_blocks.length; i += 1) {
-    					each_blocks[i].d(1);
-    				}
-
-    				each_blocks.length = each_value.length;
-    			}
-
-    			if (!current || dirty & /*id*/ 8) {
-    				attr_dev(section, "id", /*id*/ ctx[3]);
-    			}
-    		},
-    		i: function intro(local) {
-    			if (current) return;
-    			transition_in(text_1.$$.fragment, local);
-    			current = true;
-    		},
-    		o: function outro(local) {
-    			transition_out(text_1.$$.fragment, local);
-    			current = false;
-    		},
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(section);
-    			destroy_component(text_1);
-    			destroy_each(each_blocks, detaching);
-    			/*section_binding*/ ctx[6](null);
+    			/*section_1_binding*/ ctx[11](null);
     		}
     	};
 
@@ -4174,78 +4345,133 @@ var app = (function () {
     		block,
     		id: create_if_block$3.name,
     		type: "if",
-    		source: "(14:0) {#if id !== 'thanks'}",
+    		source: "(21:4) {#if size === 'small'}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (36:8) {#each list as li}
-    function create_each_block_1$1(ctx) {
-    	let li;
-    	let raw_value = /*li*/ ctx[8] + "";
+    // (36:12) 
+    function create_foreground_slot$1(ctx) {
+    	let div;
+    	let section_1;
+    	let p;
+    	let t;
 
     	const block = {
     		c: function create() {
-    			li = element("li");
-    			add_location(li, file$7, 36, 8, 673);
+    			div = element("div");
+    			section_1 = element("section");
+    			p = element("p");
+    			t = text(/*header*/ ctx[4]);
+    			attr_dev(p, "class", "not-interactive svelte-hsu2qo");
+    			add_location(p, file$8, 36, 68, 1179);
+    			attr_dev(section_1, "class", "not-interactive long-text col-text svelte-hsu2qo");
+    			add_location(section_1, file$8, 36, 16, 1127);
+    			attr_dev(div, "class", "not-interactive svelte-hsu2qo");
+    			attr_dev(div, "slot", "foreground");
+    			attr_dev(div, "id", /*id*/ ctx[1]);
+    			add_location(div, file$8, 35, 12, 1038);
     		},
     		m: function mount(target, anchor) {
-    			insert_dev(target, li, anchor);
-    			li.innerHTML = raw_value;
+    			insert_dev(target, div, anchor);
+    			append_dev(div, section_1);
+    			append_dev(section_1, p);
+    			append_dev(p, t);
+    			/*div_binding*/ ctx[12](div);
     		},
     		p: function update(ctx, dirty) {
-    			if (dirty & /*list*/ 4 && raw_value !== (raw_value = /*li*/ ctx[8] + "")) li.innerHTML = raw_value;		},
+    			if (dirty & /*header*/ 16) set_data_dev(t, /*header*/ ctx[4]);
+
+    			if (dirty & /*id*/ 2) {
+    				attr_dev(div, "id", /*id*/ ctx[1]);
+    			}
+    		},
     		d: function destroy(detaching) {
-    			if (detaching) detach_dev(li);
+    			if (detaching) detach_dev(div);
+    			/*div_binding*/ ctx[12](null);
     		}
     	};
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_each_block_1$1.name,
-    		type: "each",
-    		source: "(36:8) {#each list as li}",
+    		id: create_foreground_slot$1.name,
+    		type: "slot",
+    		source: "(36:12) ",
     		ctx
     	});
 
     	return block;
     }
 
-    // (22:8) {#each list as li}
-    function create_each_block$5(ctx) {
-    	let li;
-    	let raw_value = /*li*/ ctx[8] + "";
+    // (39:12) 
+    function create_background_slot$1(ctx) {
+    	let div;
+    	let video;
+    	let current;
+
+    	video = new Video({
+    			props: {
+    				src: /*src*/ ctx[0],
+    				captions: /*captions*/ ctx[2],
+    				layout: /*layout*/ ctx[9],
+    				controls: "controls",
+    				scroll: "false",
+    				active: /*intersecting*/ ctx[8],
+    				audible
+    			},
+    			$$inline: true
+    		});
 
     	const block = {
     		c: function create() {
-    			li = element("li");
-    			add_location(li, file$7, 22, 8, 457);
+    			div = element("div");
+    			create_component(video.$$.fragment);
+    			attr_dev(div, "class", "full");
+    			attr_dev(div, "slot", "background");
+    			add_location(div, file$8, 38, 12, 1260);
     		},
     		m: function mount(target, anchor) {
-    			insert_dev(target, li, anchor);
-    			li.innerHTML = raw_value;
+    			insert_dev(target, div, anchor);
+    			mount_component(video, div, null);
+    			current = true;
     		},
     		p: function update(ctx, dirty) {
-    			if (dirty & /*list*/ 4 && raw_value !== (raw_value = /*li*/ ctx[8] + "")) li.innerHTML = raw_value;		},
+    			const video_changes = {};
+    			if (dirty & /*src*/ 1) video_changes.src = /*src*/ ctx[0];
+    			if (dirty & /*captions*/ 4) video_changes.captions = /*captions*/ ctx[2];
+    			if (dirty & /*intersecting*/ 256) video_changes.active = /*intersecting*/ ctx[8];
+    			video.$set(video_changes);
+    		},
+    		i: function intro(local) {
+    			if (current) return;
+    			transition_in(video.$$.fragment, local);
+    			current = true;
+    		},
+    		o: function outro(local) {
+    			transition_out(video.$$.fragment, local);
+    			current = false;
+    		},
     		d: function destroy(detaching) {
-    			if (detaching) detach_dev(li);
+    			if (detaching) detach_dev(div);
+    			destroy_component(video);
     		}
     	};
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_each_block$5.name,
-    		type: "each",
-    		source: "(22:8) {#each list as li}",
+    		id: create_background_slot$1.name,
+    		type: "slot",
+    		source: "(39:12) ",
     		ctx
     	});
 
     	return block;
     }
 
-    function create_fragment$9(ctx) {
+    // (20:0) <IntersectionObserver {element} bind:intersecting threshold=.5>
+    function create_default_slot$1(ctx) {
     	let current_block_type_index;
     	let if_block;
     	let if_block_anchor;
@@ -4254,7 +4480,7 @@ var app = (function () {
     	const if_blocks = [];
 
     	function select_block_type(ctx, dirty) {
-    		if (/*id*/ ctx[3] !== "thanks") return 0;
+    		if (/*size*/ ctx[3] === "small") return 0;
     		return 1;
     	}
 
@@ -4266,15 +4492,12 @@ var app = (function () {
     			if_block.c();
     			if_block_anchor = empty();
     		},
-    		l: function claim(nodes) {
-    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
-    		},
     		m: function mount(target, anchor) {
     			if_blocks[current_block_type_index].m(target, anchor);
     			insert_dev(target, if_block_anchor, anchor);
     			current = true;
     		},
-    		p: function update(ctx, [dirty]) {
+    		p: function update(ctx, dirty) {
     			let previous_block_index = current_block_type_index;
     			current_block_type_index = select_block_type(ctx);
 
@@ -4318,6 +4541,434 @@ var app = (function () {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
+    		id: create_default_slot$1.name,
+    		type: "slot",
+    		source: "(20:0) <IntersectionObserver {element} bind:intersecting threshold=.5>",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function create_fragment$a(ctx) {
+    	let intersectionobserver;
+    	let updating_intersecting;
+    	let current;
+
+    	function intersectionobserver_intersecting_binding(value) {
+    		/*intersectionobserver_intersecting_binding*/ ctx[15](value);
+    	}
+
+    	let intersectionobserver_props = {
+    		element: /*element*/ ctx[5],
+    		threshold: ".5",
+    		$$slots: { default: [create_default_slot$1] },
+    		$$scope: { ctx }
+    	};
+
+    	if (/*intersecting*/ ctx[8] !== void 0) {
+    		intersectionobserver_props.intersecting = /*intersecting*/ ctx[8];
+    	}
+
+    	intersectionobserver = new IntersectionObserver_1({
+    			props: intersectionobserver_props,
+    			$$inline: true
+    		});
+
+    	binding_callbacks.push(() => bind(intersectionobserver, "intersecting", intersectionobserver_intersecting_binding));
+
+    	const block = {
+    		c: function create() {
+    			create_component(intersectionobserver.$$.fragment);
+    		},
+    		l: function claim(nodes) {
+    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+    		},
+    		m: function mount(target, anchor) {
+    			mount_component(intersectionobserver, target, anchor);
+    			current = true;
+    		},
+    		p: function update(ctx, [dirty]) {
+    			const intersectionobserver_changes = {};
+    			if (dirty & /*element*/ 32) intersectionobserver_changes.element = /*element*/ ctx[5];
+
+    			if (dirty & /*$$scope, intersecting, id, element, src, captions, header, size, index, offset*/ 66047) {
+    				intersectionobserver_changes.$$scope = { dirty, ctx };
+    			}
+
+    			if (!updating_intersecting && dirty & /*intersecting*/ 256) {
+    				updating_intersecting = true;
+    				intersectionobserver_changes.intersecting = /*intersecting*/ ctx[8];
+    				add_flush_callback(() => updating_intersecting = false);
+    			}
+
+    			intersectionobserver.$set(intersectionobserver_changes);
+    		},
+    		i: function intro(local) {
+    			if (current) return;
+    			transition_in(intersectionobserver.$$.fragment, local);
+    			current = true;
+    		},
+    		o: function outro(local) {
+    			transition_out(intersectionobserver.$$.fragment, local);
+    			current = false;
+    		},
+    		d: function destroy(detaching) {
+    			destroy_component(intersectionobserver, detaching);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$a.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    const audible = true;
+
+    function instance$a($$self, $$props, $$invalidate) {
+    	let { $$slots: slots = {}, $$scope } = $$props;
+    	validate_slots("InterviewVideo", slots, []);
+    	let { src } = $$props;
+    	let { id } = $$props;
+    	let { captions } = $$props;
+    	let { size } = $$props;
+    	let { header } = $$props;
+    	const layout = size === "small" ? "col-text" : "cover";
+    	const section = size === "small" ? "col-text" : "chapter";
+    	let element, index = 0, offset;
+    	let intersecting;
+    	const writable_props = ["src", "id", "captions", "size", "header"];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<InterviewVideo> was created with unknown prop '${key}'`);
+    	});
+
+    	function section_1_binding($$value) {
+    		binding_callbacks[$$value ? "unshift" : "push"](() => {
+    			element = $$value;
+    			$$invalidate(5, element);
+    		});
+    	}
+
+    	function div_binding($$value) {
+    		binding_callbacks[$$value ? "unshift" : "push"](() => {
+    			element = $$value;
+    			$$invalidate(5, element);
+    		});
+    	}
+
+    	function scroller_index_binding(value) {
+    		index = value;
+    		$$invalidate(6, index);
+    	}
+
+    	function scroller_offset_binding(value) {
+    		offset = value;
+    		$$invalidate(7, offset);
+    	}
+
+    	function intersectionobserver_intersecting_binding(value) {
+    		intersecting = value;
+    		$$invalidate(8, intersecting);
+    	}
+
+    	$$self.$$set = $$props => {
+    		if ("src" in $$props) $$invalidate(0, src = $$props.src);
+    		if ("id" in $$props) $$invalidate(1, id = $$props.id);
+    		if ("captions" in $$props) $$invalidate(2, captions = $$props.captions);
+    		if ("size" in $$props) $$invalidate(3, size = $$props.size);
+    		if ("header" in $$props) $$invalidate(4, header = $$props.header);
+    	};
+
+    	$$self.$capture_state = () => ({
+    		IntersectionObserver: IntersectionObserver_1,
+    		Scroller,
+    		Video,
+    		src,
+    		id,
+    		captions,
+    		size,
+    		header,
+    		layout,
+    		section,
+    		audible,
+    		element,
+    		index,
+    		offset,
+    		intersecting
+    	});
+
+    	$$self.$inject_state = $$props => {
+    		if ("src" in $$props) $$invalidate(0, src = $$props.src);
+    		if ("id" in $$props) $$invalidate(1, id = $$props.id);
+    		if ("captions" in $$props) $$invalidate(2, captions = $$props.captions);
+    		if ("size" in $$props) $$invalidate(3, size = $$props.size);
+    		if ("header" in $$props) $$invalidate(4, header = $$props.header);
+    		if ("element" in $$props) $$invalidate(5, element = $$props.element);
+    		if ("index" in $$props) $$invalidate(6, index = $$props.index);
+    		if ("offset" in $$props) $$invalidate(7, offset = $$props.offset);
+    		if ("intersecting" in $$props) $$invalidate(8, intersecting = $$props.intersecting);
+    	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
+
+    	return [
+    		src,
+    		id,
+    		captions,
+    		size,
+    		header,
+    		element,
+    		index,
+    		offset,
+    		intersecting,
+    		layout,
+    		section,
+    		section_1_binding,
+    		div_binding,
+    		scroller_index_binding,
+    		scroller_offset_binding,
+    		intersectionobserver_intersecting_binding
+    	];
+    }
+
+    class InterviewVideo extends SvelteComponentDev {
+    	constructor(options) {
+    		super(options);
+
+    		init(this, options, instance$a, create_fragment$a, safe_not_equal, {
+    			src: 0,
+    			id: 1,
+    			captions: 2,
+    			size: 3,
+    			header: 4
+    		});
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "InterviewVideo",
+    			options,
+    			id: create_fragment$a.name
+    		});
+
+    		const { ctx } = this.$$;
+    		const props = options.props || {};
+
+    		if (/*src*/ ctx[0] === undefined && !("src" in props)) {
+    			console.warn("<InterviewVideo> was created without expected prop 'src'");
+    		}
+
+    		if (/*id*/ ctx[1] === undefined && !("id" in props)) {
+    			console.warn("<InterviewVideo> was created without expected prop 'id'");
+    		}
+
+    		if (/*captions*/ ctx[2] === undefined && !("captions" in props)) {
+    			console.warn("<InterviewVideo> was created without expected prop 'captions'");
+    		}
+
+    		if (/*size*/ ctx[3] === undefined && !("size" in props)) {
+    			console.warn("<InterviewVideo> was created without expected prop 'size'");
+    		}
+
+    		if (/*header*/ ctx[4] === undefined && !("header" in props)) {
+    			console.warn("<InterviewVideo> was created without expected prop 'header'");
+    		}
+    	}
+
+    	get src() {
+    		throw new Error("<InterviewVideo>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set src(value) {
+    		throw new Error("<InterviewVideo>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	get id() {
+    		throw new Error("<InterviewVideo>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set id(value) {
+    		throw new Error("<InterviewVideo>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	get captions() {
+    		throw new Error("<InterviewVideo>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set captions(value) {
+    		throw new Error("<InterviewVideo>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	get size() {
+    		throw new Error("<InterviewVideo>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set size(value) {
+    		throw new Error("<InterviewVideo>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	get header() {
+    		throw new Error("<InterviewVideo>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set header(value) {
+    		throw new Error("<InterviewVideo>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+    }
+
+    /* src/components/text/Notes.svelte generated by Svelte v3.38.2 */
+    const file$7 = "src/components/text/Notes.svelte";
+
+    function get_each_context$5(ctx, list, i) {
+    	const child_ctx = ctx.slice();
+    	child_ctx[8] = list[i];
+    	return child_ctx;
+    }
+
+    // (20:8) {#each list as li}
+    function create_each_block$5(ctx) {
+    	let li;
+    	let raw_value = /*li*/ ctx[8] + "";
+
+    	const block = {
+    		c: function create() {
+    			li = element("li");
+    			add_location(li, file$7, 20, 8, 362);
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, li, anchor);
+    			li.innerHTML = raw_value;
+    		},
+    		p: function update(ctx, dirty) {
+    			if (dirty & /*list*/ 4 && raw_value !== (raw_value = /*li*/ ctx[8] + "")) li.innerHTML = raw_value;		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(li);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_each_block$5.name,
+    		type: "each",
+    		source: "(20:8) {#each list as li}",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function create_fragment$9(ctx) {
+    	let section;
+    	let text_1;
+    	let t;
+    	let ul;
+    	let current;
+
+    	text_1 = new Text({
+    			props: {
+    				text: /*text*/ ctx[0],
+    				header: /*header*/ ctx[1],
+    				dropcap: "false"
+    			},
+    			$$inline: true
+    		});
+
+    	let each_value = /*list*/ ctx[2];
+    	validate_each_argument(each_value);
+    	let each_blocks = [];
+
+    	for (let i = 0; i < each_value.length; i += 1) {
+    		each_blocks[i] = create_each_block$5(get_each_context$5(ctx, each_value, i));
+    	}
+
+    	const block = {
+    		c: function create() {
+    			section = element("section");
+    			create_component(text_1.$$.fragment);
+    			t = space();
+    			ul = element("ul");
+
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].c();
+    			}
+
+    			add_location(ul, file$7, 18, 4, 322);
+    			attr_dev(section, "class", "col-text thanks svelte-wd9vi5");
+    			add_location(section, file$7, 12, 0, 190);
+    		},
+    		l: function claim(nodes) {
+    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, section, anchor);
+    			mount_component(text_1, section, null);
+    			append_dev(section, t);
+    			append_dev(section, ul);
+
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].m(ul, null);
+    			}
+
+    			/*section_binding*/ ctx[6](section);
+    			current = true;
+    		},
+    		p: function update(ctx, [dirty]) {
+    			const text_1_changes = {};
+    			if (dirty & /*text*/ 1) text_1_changes.text = /*text*/ ctx[0];
+    			if (dirty & /*header*/ 2) text_1_changes.header = /*header*/ ctx[1];
+    			text_1.$set(text_1_changes);
+
+    			if (dirty & /*list*/ 4) {
+    				each_value = /*list*/ ctx[2];
+    				validate_each_argument(each_value);
+    				let i;
+
+    				for (i = 0; i < each_value.length; i += 1) {
+    					const child_ctx = get_each_context$5(ctx, each_value, i);
+
+    					if (each_blocks[i]) {
+    						each_blocks[i].p(child_ctx, dirty);
+    					} else {
+    						each_blocks[i] = create_each_block$5(child_ctx);
+    						each_blocks[i].c();
+    						each_blocks[i].m(ul, null);
+    					}
+    				}
+
+    				for (; i < each_blocks.length; i += 1) {
+    					each_blocks[i].d(1);
+    				}
+
+    				each_blocks.length = each_value.length;
+    			}
+    		},
+    		i: function intro(local) {
+    			if (current) return;
+    			transition_in(text_1.$$.fragment, local);
+    			current = true;
+    		},
+    		o: function outro(local) {
+    			transition_out(text_1.$$.fragment, local);
+    			current = false;
+    		},
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(section);
+    			destroy_component(text_1);
+    			destroy_each(each_blocks, detaching);
+    			/*section_binding*/ ctx[6](null);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
     		id: create_fragment$9.name,
     		type: "component",
     		source: "",
@@ -4345,7 +4996,7 @@ var app = (function () {
     	function section_binding($$value) {
     		binding_callbacks[$$value ? "unshift" : "push"](() => {
     			element = $$value;
-    			$$invalidate(4, element);
+    			$$invalidate(3, element);
     		});
     	}
 
@@ -4353,7 +5004,7 @@ var app = (function () {
     		if ("text" in $$props) $$invalidate(0, text = $$props.text);
     		if ("header" in $$props) $$invalidate(1, header = $$props.header);
     		if ("list" in $$props) $$invalidate(2, list = $$props.list);
-    		if ("id" in $$props) $$invalidate(3, id = $$props.id);
+    		if ("id" in $$props) $$invalidate(4, id = $$props.id);
     		if ("chapter" in $$props) $$invalidate(5, chapter = $$props.chapter);
     	};
 
@@ -4372,23 +5023,17 @@ var app = (function () {
     		if ("text" in $$props) $$invalidate(0, text = $$props.text);
     		if ("header" in $$props) $$invalidate(1, header = $$props.header);
     		if ("list" in $$props) $$invalidate(2, list = $$props.list);
-    		if ("id" in $$props) $$invalidate(3, id = $$props.id);
+    		if ("id" in $$props) $$invalidate(4, id = $$props.id);
     		if ("chapter" in $$props) $$invalidate(5, chapter = $$props.chapter);
     		if ("pos" in $$props) pos = $$props.pos;
-    		if ("element" in $$props) $$invalidate(4, element = $$props.element);
+    		if ("element" in $$props) $$invalidate(3, element = $$props.element);
     	};
 
     	if ($$props && "$$inject" in $$props) {
     		$$self.$inject_state($$props.$$inject);
     	}
 
-    	$$self.$$.update = () => {
-    		if ($$self.$$.dirty & /*element, id*/ 24) {
-    			if (element) $$invalidate(5, chapter[id] = { pos: element.offsetTop, id: element.id }, chapter);
-    		}
-    	};
-
-    	return [text, header, list, id, element, chapter, section_binding];
+    	return [text, header, list, element, id, chapter, section_binding];
     }
 
     class Notes extends SvelteComponentDev {
@@ -4399,7 +5044,7 @@ var app = (function () {
     			text: 0,
     			header: 1,
     			list: 2,
-    			id: 3,
+    			id: 4,
     			chapter: 5
     		});
 
@@ -4425,7 +5070,7 @@ var app = (function () {
     			console.warn("<Notes> was created without expected prop 'list'");
     		}
 
-    		if (/*id*/ ctx[3] === undefined && !("id" in props)) {
+    		if (/*id*/ ctx[4] === undefined && !("id" in props)) {
     			console.warn("<Notes> was created without expected prop 'id'");
     		}
 
@@ -6578,8 +7223,6 @@ var app = (function () {
     }
 
     /* src/components/charts/Scatter.svelte generated by Svelte v3.38.2 */
-
-    const { console: console_1 } = globals;
     const file$4 = "src/components/charts/Scatter.svelte";
 
     function get_each_context$3(ctx, list, i) {
@@ -6589,7 +7232,7 @@ var app = (function () {
     	return child_ctx;
     }
 
-    // (43:2) {#each data as d, i}
+    // (42:2) {#each data as d, i}
     function create_each_block$3(ctx) {
     	let minivideo;
     	let current;
@@ -6640,14 +7283,14 @@ var app = (function () {
     		block,
     		id: create_each_block$3.name,
     		type: "each",
-    		source: "(43:2) {#each data as d, i}",
+    		source: "(42:2) {#each data as d, i}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (34:0) <Canvas   {width}   {height}   style="cursor: pointer"   on:mousemove={({ offsetX: x, offsetY: y }) => (picked = delaunay.find(x, y))}   on:mouseout={() => (picked = null)}   on:mousedown={() => (click = true)}   on:mouseup={() => (click = false)} >
+    // (33:0) <Canvas   {width}   {height}   style="cursor: pointer"   on:mousemove={({ offsetX: x, offsetY: y }) => (picked = delaunay.find(x, y))}   on:mouseout={() => (picked = null)}   on:mousedown={() => (click = true)}   on:mouseup={() => (click = false)} >
     function create_default_slot(ctx) {
     	let each_1_anchor;
     	let current;
@@ -6736,7 +7379,7 @@ var app = (function () {
     		block,
     		id: create_default_slot.name,
     		type: "slot",
-    		source: "(34:0) <Canvas   {width}   {height}   style=\\\"cursor: pointer\\\"   on:mousemove={({ offsetX: x, offsetY: y }) => (picked = delaunay.find(x, y))}   on:mouseout={() => (picked = null)}   on:mousedown={() => (click = true)}   on:mouseup={() => (click = false)} >",
+    		source: "(33:0) <Canvas   {width}   {height}   style=\\\"cursor: pointer\\\"   on:mousemove={({ offsetX: x, offsetY: y }) => (picked = delaunay.find(x, y))}   on:mouseout={() => (picked = null)}   on:mousedown={() => (click = true)}   on:mouseup={() => (click = false)} >",
     		ctx
     	});
 
@@ -6791,7 +7434,7 @@ var app = (function () {
     			video_1.autoplay = true;
     			video_1.loop = true;
     			attr_dev(video_1, "class", "svelte-1wcu65t");
-    			add_location(video_1, file$4, 24, 0, 429);
+    			add_location(video_1, file$4, 23, 0, 404);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -6866,7 +7509,7 @@ var app = (function () {
     	const writable_props = ["data", "width", "height"];
 
     	Object.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1.warn(`<Scatter> was created with unknown prop '${key}'`);
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<Scatter> was created with unknown prop '${key}'`);
     	});
 
     	function video_1_binding($$value) {
@@ -6925,10 +7568,6 @@ var app = (function () {
     		if ($$self.$$.dirty & /*data*/ 1) {
     			$$invalidate(7, delaunay = Delaunay.from(data, d => d.x, d => d.y));
     		}
-
-    		if ($$self.$$.dirty & /*video*/ 8) {
-    			console.log(video);
-    		}
     	};
 
     	return [
@@ -6965,15 +7604,15 @@ var app = (function () {
     		const props = options.props || {};
 
     		if (/*data*/ ctx[0] === undefined && !("data" in props)) {
-    			console_1.warn("<Scatter> was created without expected prop 'data'");
+    			console.warn("<Scatter> was created without expected prop 'data'");
     		}
 
     		if (/*width*/ ctx[1] === undefined && !("width" in props)) {
-    			console_1.warn("<Scatter> was created without expected prop 'width'");
+    			console.warn("<Scatter> was created without expected prop 'width'");
     		}
 
     		if (/*height*/ ctx[2] === undefined && !("height" in props)) {
-    			console_1.warn("<Scatter> was created without expected prop 'height'");
+    			console.warn("<Scatter> was created without expected prop 'height'");
     		}
     	}
 
@@ -9574,7 +10213,7 @@ var app = (function () {
     			add_location(marker, file$2, 76, 8, 1956);
     			add_location(defs, file$2, 75, 4, 1941);
     			add_location(g0, file$2, 80, 1, 2135);
-    			add_location(g1, file$2, 91, 1, 2310);
+    			add_location(g1, file$2, 91, 1, 2312);
     			attr_dev(svg, "xmlns:svg", "https://www.w3.org/2000/svg");
     			attr_dev(svg, "viewBox", svg_viewBox_value = "0 0 " + (/*width*/ ctx[3] - /*margin*/ ctx[0].right - /*margin*/ ctx[0].left) + " " + /*height*/ ctx[4]);
     			attr_dev(svg, "width", /*width*/ ctx[3]);
@@ -9698,7 +10337,7 @@ var app = (function () {
     			attr_dev(circle, "cx", circle_cx_value = /*node*/ ctx[18].cx);
     			attr_dev(circle, "cy", circle_cy_value = /*node*/ ctx[18].cy);
     			attr_dev(circle, "r", /*radius*/ ctx[5]);
-    			attr_dev(circle, "fill", "#fff");
+    			attr_dev(circle, "stroke", "#fff");
     			add_location(circle, file$2, 82, 2, 2171);
     		},
     		m: function mount(target, anchor) {
@@ -9746,7 +10385,7 @@ var app = (function () {
     			attr_dev(path, "stroke-width", "4");
     			attr_dev(path, "fill", "none");
     			attr_dev(path, "marker-end", "url(#arrowhead)");
-    			add_location(path, file$2, 93, 2, 2346);
+    			add_location(path, file$2, 93, 2, 2348);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, path, anchor);
@@ -10030,21 +10669,27 @@ var app = (function () {
     function create_fragment$1(ctx) {
     	let div;
     	let p0;
-    	let t;
+    	let t0;
     	let p1;
+    	let t1;
+    	let p2;
 
     	const block = {
     		c: function create() {
     			div = element("div");
     			p0 = element("p");
-    			t = space();
+    			t0 = space();
     			p1 = element("p");
+    			t1 = space();
+    			p2 = element("p");
     			attr_dev(p0, "class", "byline svelte-1dqbfhm");
-    			add_location(p0, file$1, 6, 4, 109);
+    			add_location(p0, file$1, 7, 4, 127);
     			attr_dev(p1, "class", "byline small svelte-1dqbfhm");
-    			add_location(p1, file$1, 7, 4, 150);
+    			add_location(p1, file$1, 8, 4, 168);
+    			attr_dev(p2, "class", "byline small svelte-1dqbfhm");
+    			add_location(p2, file$1, 9, 4, 213);
     			attr_dev(div, "class", "credits col-text svelte-1dqbfhm");
-    			add_location(div, file$1, 5, 0, 74);
+    			add_location(div, file$1, 6, 0, 92);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -10052,13 +10697,16 @@ var app = (function () {
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
     			append_dev(div, p0);
-    			p0.innerHTML = /*byline*/ ctx[1];
-    			append_dev(div, t);
+    			p0.innerHTML = /*byline*/ ctx[2];
+    			append_dev(div, t0);
     			append_dev(div, p1);
-    			p1.innerHTML = /*date*/ ctx[0];
+    			p1.innerHTML = /*date*/ ctx[1];
+    			append_dev(div, t1);
+    			append_dev(div, p2);
+    			p2.innerHTML = /*award*/ ctx[0];
     		},
     		p: function update(ctx, [dirty]) {
-    			if (dirty & /*byline*/ 2) p0.innerHTML = /*byline*/ ctx[1];			if (dirty & /*date*/ 1) p1.innerHTML = /*date*/ ctx[0];		},
+    			if (dirty & /*byline*/ 4) p0.innerHTML = /*byline*/ ctx[2];			if (dirty & /*date*/ 2) p1.innerHTML = /*date*/ ctx[1];			if (dirty & /*award*/ 1) p2.innerHTML = /*award*/ ctx[0];		},
     		i: noop,
     		o: noop,
     		d: function destroy(detaching) {
@@ -10080,40 +10728,43 @@ var app = (function () {
     function instance$1($$self, $$props, $$invalidate) {
     	let { $$slots: slots = {}, $$scope } = $$props;
     	validate_slots("Credits", slots, []);
+    	let { award } = $$props;
     	let { date } = $$props;
     	let { byline } = $$props;
     	let { update } = $$props;
-    	const writable_props = ["date", "byline", "update"];
+    	const writable_props = ["award", "date", "byline", "update"];
 
     	Object.keys($$props).forEach(key => {
     		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<Credits> was created with unknown prop '${key}'`);
     	});
 
     	$$self.$$set = $$props => {
-    		if ("date" in $$props) $$invalidate(0, date = $$props.date);
-    		if ("byline" in $$props) $$invalidate(1, byline = $$props.byline);
-    		if ("update" in $$props) $$invalidate(2, update = $$props.update);
+    		if ("award" in $$props) $$invalidate(0, award = $$props.award);
+    		if ("date" in $$props) $$invalidate(1, date = $$props.date);
+    		if ("byline" in $$props) $$invalidate(2, byline = $$props.byline);
+    		if ("update" in $$props) $$invalidate(3, update = $$props.update);
     	};
 
-    	$$self.$capture_state = () => ({ date, byline, update });
+    	$$self.$capture_state = () => ({ award, date, byline, update });
 
     	$$self.$inject_state = $$props => {
-    		if ("date" in $$props) $$invalidate(0, date = $$props.date);
-    		if ("byline" in $$props) $$invalidate(1, byline = $$props.byline);
-    		if ("update" in $$props) $$invalidate(2, update = $$props.update);
+    		if ("award" in $$props) $$invalidate(0, award = $$props.award);
+    		if ("date" in $$props) $$invalidate(1, date = $$props.date);
+    		if ("byline" in $$props) $$invalidate(2, byline = $$props.byline);
+    		if ("update" in $$props) $$invalidate(3, update = $$props.update);
     	};
 
     	if ($$props && "$$inject" in $$props) {
     		$$self.$inject_state($$props.$$inject);
     	}
 
-    	return [date, byline, update];
+    	return [award, date, byline, update];
     }
 
     class Credits extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$1, create_fragment$1, safe_not_equal, { date: 0, byline: 1, update: 2 });
+    		init(this, options, instance$1, create_fragment$1, safe_not_equal, { award: 0, date: 1, byline: 2, update: 3 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
@@ -10125,17 +10776,29 @@ var app = (function () {
     		const { ctx } = this.$$;
     		const props = options.props || {};
 
-    		if (/*date*/ ctx[0] === undefined && !("date" in props)) {
+    		if (/*award*/ ctx[0] === undefined && !("award" in props)) {
+    			console.warn("<Credits> was created without expected prop 'award'");
+    		}
+
+    		if (/*date*/ ctx[1] === undefined && !("date" in props)) {
     			console.warn("<Credits> was created without expected prop 'date'");
     		}
 
-    		if (/*byline*/ ctx[1] === undefined && !("byline" in props)) {
+    		if (/*byline*/ ctx[2] === undefined && !("byline" in props)) {
     			console.warn("<Credits> was created without expected prop 'byline'");
     		}
 
-    		if (/*update*/ ctx[2] === undefined && !("update" in props)) {
+    		if (/*update*/ ctx[3] === undefined && !("update" in props)) {
     			console.warn("<Credits> was created without expected prop 'update'");
     		}
+    	}
+
+    	get award() {
+    		throw new Error("<Credits>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set award(value) {
+    		throw new Error("<Credits>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
     	}
 
     	get date() {
@@ -10722,7 +11385,7 @@ var app = (function () {
     			{
     				video: "00_intro_lola",
     				poster: "00_intro_loop_alba.jpg",
-    				p: "Aquest és el testimoni de la Lola"
+    				p: "Aquest és el seu testimoni"
     			},
     			{
     				video: "00_intro_loop_alba",
@@ -10732,12 +11395,12 @@ var app = (function () {
     			{
     				video: "00_intro_alba",
     				poster: "00_intro_alba.jpg",
-    				p: "Escolta la història d’Alba"
+    				p: "Escolta la història de l’Alba"
     			},
     			{
     				video: "00_intro_loop_alba",
     				poster: "00_intro_alba.jpg",
-    				p: "Aquest reportatge explora el patiment dels infants quan són víctimes de maltractaments psicològics, físics i abusos sexuals dins de l’entorn familiar. La violència masclista és, sovint, el detonant. Per respecte als testimonis, els seus noms s’han canviat i les veus estan distorsionades."
+    				p: "Aquest reportatge explora el patiment dels infants quan són víctimes de maltractaments psicològics, físics i abusos sexuals dins de l’entorn familiar. La violència masclista és, sovint, el detonant. <br/> <br/><span class=\"respecte\">Per respecte als testimonis, els seus noms s’han canviat i les veus estan distorsionades.</span>"
     			},
     			{
     				video: "00_intro_loop_alba",
@@ -10753,22 +11416,26 @@ var app = (function () {
     	},
     	{
     		type: "credits",
-    		date: "9 de Juny de 2022",
+    		date: "9 de juny de 2022",
     		update: "",
-    		byline: "Por Karma Peiró, Rocío Minvielle, Francina Cortés i Xaquín G.V."
+    		byline: "Por Karma Peiró, Rocío Minvielle, Francina Cortés i Xaquín G.V.",
+    		award: "Premi Montserrat Roig 2019, atorgat per l’Ajuntament de Barcelona"
     	},
     	{
     		type: "text",
     		text: [
     			{
-    				p: "Després de vuit mesos d'investigació podem confirmar que l'anàlisi de dades sobre maltractaments i abusos sexuals als menors, les peticions d'informació pública, les entrevistes a una cinquantena de professionals i la documentació publicada demostren que és urgent un canvi en l'abordatge de les violències cap als infants. La llei 8/2021 de Protecció a la Infància i Adolescència s'està incomplint perquè hi ha..."
+    				p: "Després de vuit mesos d'investigació podem confirmar que l'anàlisi de dades sobre maltractaments i abusos sexuals als menors, les peticions d'informació pública, les entrevistes a una trentena de professionals i la documentació publicada demostren que és urgent un canvi en l'abordatge de les violències cap als infants."
+    			},
+    			{
+    				p: "La llei 8/2021 de Protecció a la Infància i Adolescència s'està incomplint perquè hi ha..."
     			}
     		],
     		list: [
     			"Saturació dels serveis assistencials amb llistes d’espera de mesos",
     			"Precarització laboral del personal que atén els infants",
     			"Processos legals que duren 3 anys de mitjana",
-    			"Sentències adult-cèntriques que posen en situació de vulnerabilitat els menors",
+    			"Sentències adultocèntriques que posen en risc els menors",
     			"Excés de protocols i molta confusió sobre les actuacions a seguir",
     			"Falten dades dels serveis i avaluacions públiques per prendre decisions",
     			"Manca de formació amb perspectiva de gènere en l’àmbit de la salut, educació i justícia"
@@ -10779,7 +11446,7 @@ var app = (function () {
     		dropcap: "null",
     		text: [
     			{
-    				p: "Actualment, el sistema públic falla en la detecció, atenció i prevenció de casos de maltractaments i abusos sexuals a menors. El Pla de millora del govern català ja ho reconeixia el 2020, on es proposen 154 mesures urgents a abordar."
+    				p: "Actualment, el sistema públic falla en la <b>detecció, atenció i prevenció</b> de casos de maltractaments i abusos sexuals a menors. El <a href=”https://dretssocials.gencat.cat/web/.content/01departament/05plansactuacio/Infancia_i_adolescencia/Pla_Accio_Millora_Sistema_Atencio.pdf” target=”_blank”>Pla de millora </a> del govern català ja ho reconeixia el 2020, on es proposaven 154 mesures urgents a abordar."
     			}
     		]
     	},
@@ -10788,32 +11455,32 @@ var app = (function () {
     		header: "",
     		text: [
     			{
-    				data: "5",
-    				range: "240",
+    				data: "4",
+    				range: "180",
     				head: "Slide head",
-    				p: "Infants morts per maltractament de violència domèstica i masclista (2021)"
+    				p: "A Catalunya, 4 infants van ser assassinats per violència domèstica i masclista el 2021"
     			},
     			{
     				data: "2359",
-    				range: "96",
+    				range: "80",
     				head: "Slide head",
     				p: "Denúncies per maltractament i violència cap als menors"
     			},
     			{
     				data: "5928",
-    				range: "72",
+    				range: "64",
     				head: "Slide head",
-    				p: "Víctimes violència domèstica a menors i adolescents ateses pels Mossos"
+    				p: "Víctimes de violència domèstica a menors i adolescents ateses pels Mossos"
     			},
     			{
     				data: "11365",
-    				range: "25",
+    				range: "32",
     				head: "Slide head",
-    				p: "Trucades al Telèfon Infàcia Respon 116 111"
+    				p: "Trucades al Telèfon Infància Respon 116 111"
     			},
     			{
     				data: "16579",
-    				range: "20",
+    				range: "28",
     				head: "Slide head",
     				p: "Casos tutelats per la DGAIA"
     			},
@@ -10821,13 +11488,13 @@ var app = (function () {
     				data: "45078",
     				range: "20",
     				head: "Slide head",
-    				p: "Estimació total de menors maltractats que viuen a cases on la mare pateix violència física o sexual"
+    				p: "Estimació de menors maltractats que viuen a cases on la mare pateix violència física o sexual"
     			},
     			{
     				data: "87338",
     				range: "20",
     				head: "Slide head",
-    				p: "Estimació total de menors maltractats física i sexualment"
+    				p: "Estimació total dels menors maltractats física i sexualment a Catalunya al 2021"
     			}
     		]
     	},
@@ -10835,7 +11502,7 @@ var app = (function () {
     		type: "text",
     		text: [
     			{
-    				p: "A Catalunya, cada any, milers d'infants i adolescents són víctimes de maltractaments físics i abusos sexuals per part dels seus progenitors o familiars propers. No se’ls permet alçar la veu per demanar ajuda i la majoria de vegades se’ls silencia. Únicament es coneix la punta de l’iceberg, els casos més greus. Però el rerefons és molt més enrevessat, on s’amaguen la majoria dels abusos que mai surten a la llum."
+    				p: "Cada any, milers d'infants i adolescents són víctimes de maltractaments físics i abusos sexuals per part dels seus progenitors o familiars propers. No se’ls permet alçar la veu per demanar ajuda i la majoria de vegades se’ls silencia. Únicament es coneix la punta de l’iceberg, els casos més greus. Però el rerefons és molt més enrevessat, on s’amaguen la majoria dels abusos que mai surten a la llum."
     			}
     		]
     	},
@@ -10875,7 +11542,7 @@ var app = (function () {
     		type: "text",
     		text: [
     			{
-    				p: "A Catalunya, unes 200 mil dones viuen fets greus de violència masclista cada any. D’elles, aproximadament la meitat tenen filles i fills menors d’edat. Un 32% d’elles manifesta que els infants han estat presents –de manera continuada- durant els actes violents, rebent un impacte psicològic per a la resta de les seves vides."
+    				p: "A Catalunya, unes 200 mil dones viuen fets greus de violència masclista cada any. D’elles, aproximadament la meitat tenen filles i fills menors d’edat. Un 32% manifesta que els infants han estat presents –de manera continuada- durant els actes violents, rebent un impacte psicològic per a la resta de les seves vides."
     			}
     		]
     	},
@@ -10923,7 +11590,7 @@ var app = (function () {
     		type: "text",
     		text: [
     			{
-    				p: "Des de ben petita, Lola s’ha de fer càrrec del seu germà petit. Rep les mínimes explicacions dels adults desconeguts que els atenen, i no entén molt bé perquè les seves vides canvien radicalment."
+    				p: "Des de ben petita, Lola s’ha de fer càrrec del seu germanet. Rep les mínimes explicacions dels adults desconeguts que els atenen, i no entén molt bé perquè les seves vides canvien radicalment."
     			}
     		]
     	},
@@ -10937,7 +11604,7 @@ var app = (function () {
     		type: "text",
     		text: [
     			{
-    				p: "Al centre els diuen que només hi seran sis mesos, però parlant amb altres infants descobreixen que aquesta és la frase que diuen a tothom, que mai es compleix i sempre són anys."
+    				p: "Al centre els diuen que només hi seran sis mesos, però parlant amb altres infants descobreixen que és l’explicació habitual que poques vegades es compleix."
     			}
     		]
     	},
@@ -10965,7 +11632,7 @@ var app = (function () {
     		type: "chapter",
     		header: "Violència institucional",
     		id: "violencia",
-    		src: "test"
+    		src: "violencia_chapter"
     	},
     	{
     		type: "text",
@@ -11037,7 +11704,7 @@ var app = (function () {
     	{
     		type: "chapter",
     		id: "oblit",
-    		src: "test",
+    		src: "oblit_chapter",
     		header: "Oblit"
     	},
     	{
@@ -11120,7 +11787,7 @@ var app = (function () {
     		type: "text",
     		text: [
     			{
-    				p: "A les escoles hi ha mancances per fer la detecció i atenció:, \"El protocol d'Ensenyament per a mi és fred, deshumanitzat i sense suport a la víctima\", es queixa Sílvia Viladrich, educadora en un institut de secundària d'alta complexitat. \"Tens a la noia o noi que s'ha atrevit a parlar, a denunciar, amb una angoixa que no t'ho pots imaginar. I què fas? En el moment que la víctima verbalitza els fets violents, no hi ha personal especialitzat extern per protegir-lo. Se'l deriva als serveis, però aquests estan col·lapsats i torna a casa amb l'agressor a l'espera que en dues setmanes o més se la pugui atendre. Molta més transparència, molta més coordinació, si us plau\", reclama."
+    				p: "A les escoles hi ha mancances per fer la detecció i atenció:, \"El protocol d'Ensenyament per a mi és fred, deshumanitzat i sense suport a la víctima\", es queixa <b>Sílvia Viladrich</b>, educadora en un institut de secundària d'alta complexitat. \"Tens a la noia o noi que s'ha atrevit a parlar, a denunciar, amb una angoixa que no t'ho pots imaginar. I què fas? En el moment que la víctima verbalitza els fets violents, no hi ha personal especialitzat extern per protegir-lo. Se'l deriva als serveis, però aquests estan col·lapsats i torna a casa amb l'agressor a l'espera que en dues setmanes o més se la pugui atendre. Molta més transparència, molta més coordinació, si us plau\", reclama."
     			}
     		]
     	},
@@ -11177,7 +11844,7 @@ var app = (function () {
     		type: "text",
     		text: [
     			{
-    				p: "Des de mitjans del 2020 existeix a Tarragona el projecte pilot Barnahus, basat en el model islandès d'atenció als menors. Consisteix a fer anar les víctimes d'abusos sexuals i maltractaments a un únic lloc, per evitar-los reviure l'abús. És també una forma d'agilitzar l'assistència. Se li pren declaració una sola vegada per circuit tancat de televisió – amb una càmera Gessel–. L'infant parla amb psicòlegs, però pot ser vist i escoltat per la comitiva judicial i per altres serveis assistencials."
+    				p: "Des de mitjans del 2020 existeix a Tarragona el projecte pilot <a href=”https://dretssocials.gencat.cat/ca/ambits_tematics/infancia_i_adolescencia/proteccio_a_la_infancia_i_ladolescencia/barnahus/” target=”_blank”>Barnahus</a>, basat en el model islandès d'atenció als menors. Consisteix a fer anar les víctimes d'abusos sexuals i maltractaments a un únic lloc, per evitar-los reviure l'abús. És també una forma d'agilitzar l'assistència. Se li pren declaració una sola vegada per circuit tancat de televisió – amb una càmera Gessel–. L'infant parla amb psicòlegs, però pot ser vist i escoltat per la comitiva judicial i per altres serveis assistencials."
     			},
     			{
     				p: "Des del seu inici, la Barnahus de Tarragona ha atès 363 menors. La Generalitat té previst crear-ne 13 repartides per totes les vegueries."
@@ -11187,7 +11854,7 @@ var app = (function () {
     	{
     		type: "chapter",
     		id: "resiliencia",
-    		src: "test",
+    		src: "resilencia_chapter",
     		header: "Resiliència"
     	},
     	{
@@ -11200,7 +11867,7 @@ var app = (function () {
     		type: "text",
     		text: [
     			{
-    				p: "El <a href=”https://www.youtube.com/watch?v=_IugzPwpsyY” target=”_blank”>neuròleg Boris Cyrulnik</a> –referent en psicologia infantil– explica que la definició de resiliència no pot ser més simple: \"És superar-se després d'un trauma\". Aquest expert explica que un infant necessita un entorn segur per ser resilient al llarg de la seva vida. \"Els dos grans factors que fan vulnerable a l'infant són la violència entre els progenitors i la precarietat social\"."
+    				p: "El <a href=\"https://www.youtube.com/watch?v=_IugzPwpsyY\" target=\"_blank\">neuròleg Boris Cyrulnik</a> –referent en psicologia infantil– explica que la definició de resiliència no pot ser més simple: “És superar-se després d’un trauma”. Aquest expert explica que un infant necessita un entorn segur per ser resilient al llarg de la seva vida. “Els dos grans factors que fan vulnerable a l’infant són la violència entre els progenitors i la precarietat social”."
     			}
     		]
     	},
@@ -11248,10 +11915,10 @@ var app = (function () {
     		type: "text",
     		text: [
     			{
-    				p: "Resiliència és també la d'Alba i la seva filla, que està obligada a anar a un punt de des de fa anys, tot i que <a href=”https://d31243f8qkwz2j.cloudfront.net/public/docs/146/decret-357-2011-punt-trobada.pdf” target=”_blank”>el decret que regula aquests espais</a> explicita que la utilització \"ha de ser temporal i mai pot excedir els 18 mesos de durada\"."
+    				p: "Resiliència és també la de l’Alba i la seva filla, que està obligada a anar a un punt de des de fa anys, tot i que <a href=”https://d31243f8qkwz2j.cloudfront.net/public/docs/146/decret-357-2011-punt-trobada.pdf” target=”_blank”>el decret que regula aquests espais</a> explicita que la utilització \"ha de ser temporal i mai pot excedir els 18 mesos de durada\"."
     			},
     			{
-    				p: "<a href=”https://dretssocials.gencat.cat/web/.content/03ambits_tematics/15serveissocials/sistema_catala_serveis_socials/documents/informe_estat_serveis_socials/Informe-sobre-lestat-dels-serveis-socials-2020.pdf” target=”_blank”>Les dades públiques que hi ha sobre aquests serveis</a> són mínimes: el nombre de famílies i d'infants per any, però cap estudi sobre el nombre que hi assisteixen de manera cronificada. La Conselleria d'Igualtat i Feminismes té coneixement que en el 2020 – i només dels 18 serveis que controla- hi havia '58 menors que hi anaven des de feia més de dos anys'. Però desconeix els motius. Dels 23 punts que hi ha a Catalunya, cinc són un conveni municipal (Sabadell, Terrassa, Granollers, Mollet i Sant Cugat) on la Generalitat assumeix part del cost; no obstant això, no fa el mateix seguiment"
+    				p: "<a href=”https://dretssocials.gencat.cat/web/.content/03ambits_tematics/15serveissocials/sistema_catala_serveis_socials/documents/informe_estat_serveis_socials/Informe-sobre-lestat-dels-serveis-socials-2020.pdf” target=”_blank”>Les dades públiques que hi ha sobre aquests serveis</a> són mínimes: el nombre de famílies i d'infants per any, però cap estudi sobre el nombre que hi assisteixen de manera cronificada. La Conselleria d'Igualtat i Feminismes té coneixement que en el 2020 – i només dels 18 serveis que controla- hi havia '58 menors que hi anaven des de feia més de dos anys'. Desconeix els motius pels quals aquests casos s’han cronificat en el temps. Dels 23 punts que hi ha a Catalunya, cinc són un conveni municipal (Sabadell, Terrassa, Granollers, Mollet i Sant Cugat) on la Generalitat assumeix part del cost; però, no fa el mateix seguiment"
     			}
     		]
     	},
@@ -11265,7 +11932,7 @@ var app = (function () {
     		type: "text",
     		text: [
     			{
-    				p: "Fins fa molt poc, la Unitat Funcional d’Abusos a Menors (UFAM) de l'hospital Sant Joan de Déu ha estat –juntament amb l’Hospital Germans Trias– l’únic lloc de Catalunya on les mares podien acudir a fer una valoració mèdica dels seus infants des de la sanitat pública. Però en nombrosos casos, elles sortien culpabilitzades, amb dictàmens negatius dels abusos i amb l’amenaça de perdre la custòdia. Els informes de la UFAM eren una prova més que podien influenciar les valoracions judicials."
+    				p: "Fins fa molt poc, la <a href=”https://www.sjdhospitalbarcelona.org/ca/nens/abusos-al-menor-ufam” target=”_blank”>Unitat Funcional d’Abusos a Menors (UFAM)</a> de l'hospital Sant Joan de Déu ha estat –juntament amb l’Hospital Germans Trias– l’únic lloc de Catalunya on les mares podien acudir a fer una valoració mèdica dels seus infants des de la sanitat pública. Però en nombrosos casos, elles sortien culpabilitzades, amb dictàmens negatius dels abusos i amb l’amenaça de perdre la custòdia. Els informes de la UFAM eren una prova més que podien influenciar les valoracions judicials."
     			},
     			{
     				p: "El 2017 –davant l'allau de relats sobre irregularitats–, la diputada Gemma Lienas va presentar al Parlament de Catalunya una moció per demanar que la UFAM desaparegués i es creessin unitats de referència en diferents llocs. \"Els mètodes són molt qüestionables, els temps d'espera llarguíssims i no hi ha cap perspectiva de gènere\", va reclamar."
@@ -11343,7 +12010,7 @@ var app = (function () {
     	{
     		type: "chapter",
     		id: "ara",
-    		src: "test",
+    		src: "por_chapter",
     		header: "I ara què?"
     	},
     	{
@@ -11421,7 +12088,6 @@ var app = (function () {
     	},
     	{
     		type: "notes",
-    		id: "ara",
     		header: "I  jo… <br/> què puc fer?",
     		text: [
     			{
@@ -11432,14 +12098,14 @@ var app = (function () {
     			}
     		],
     		list: [
-    			"Truca al telèfon Infància respon 116 111",
+    			"Truca al <a ref=”https://dretssocials.gencat.cat/ca/ambits_tematics/infancia_i_adolescencia/proteccio_a_la_infancia_i_ladolescencia/maltractaments_dinfants_i_adolescents/infancia_respon/telefon_infancia_respon_116_111/” target=”_blank”>telèfon Infància respon 116 111</a>",
     			"Comunica els fets a través de <a href=”https://usav.educacio.gencat.cat/” target=”_blank”>l’app d’educació Usapps</a>",
+    			"Acut a l<a ref=”https://canalsalut.gencat.cat/web/.content/_A-Z/M/maltractaments_infancia/equips-funcionals-experts.pdf” target=”_blank”>’equip de salut expert</a> per casos de violència sexual infantojuvenil i maltractament greu de la teva àrea",
     			"Servicio Telefónico de Atención y Protección para víctimas de la violencia de género (ATENPRO) 900 22 22 92"
     		]
     	},
     	{
     		type: "notes",
-    		id: "thanks",
     		header: "",
     		text: [
     			{

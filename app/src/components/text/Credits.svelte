@@ -1,4 +1,5 @@
 <script>
+export let award;
 export let date;
 export let byline;
 export let update;
@@ -6,6 +7,7 @@ export let update;
 <div class='credits col-text'>
     <p class="byline">{@html byline}</p>
     <p class="byline small">{@html date}</p>
+    <p class="byline small">{@html award}</p>
 </div>
 
 <style>

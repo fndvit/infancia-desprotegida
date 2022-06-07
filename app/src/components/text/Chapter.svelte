@@ -3,44 +3,43 @@
     export let src;
     export let id;
     export let chapter;
-    export let captions;
     export let header;
 
-    const layout = 'cover';
+    const layout = '';
     let pos, element;
+    const audible = false;
 
     $:if (element) chapter[id] = {pos: element.offsetTop, id: element.id};
 
 </script>
 
-<div class='chapter-wrapper'>
-    <section class='full chapter' {id} bind:this={element}>
-        <Video
-            {src}
-            {captions}
-            {layout}
-            controls = ''
-            scroll = false
-        />
-        <h2 class='col-text {id}'>{@html header}</h2>
+<div class='{id !== 'ara' ? 'chapter-wrapper' : 'short'}'>
+    <section class='full chapter {id !== 'ara' ? '' : 'short'}' {id} bind:this={element}>
+        {#if id !== 'ara'}<img class="full" src="img/{src}.gif" alt="" />{/if}
+        <div class='header-wrapper'><h2 class='col-text'>{@html header}</h2></div>
     </section>
 </div>
 
-<style>
-    .chapter-wrapper {
-        height: 50vh;
-    }
-    h2 {
-        margin-top: -20vh;
-    }
-  .header { 
-      height: calc(50vh - 4rem);
+<style> 
+  .header-wrapper {
       position:absolute;
-      margin: 1rem 0 4rem -.5rem;
-      padding: .5rem;
-
+      bottom:0;
+      width: 100%;
+  }
+  .chapter-wrapper {
+    height: 50vh;
+    padding-bottom:3rem;
+  }
+  .short {
+    height: 20vh!important;
+    margin-bottom:1.5rem;
   }
   .full {
-        height: calc(50vh - 2rem);
+    height: 50vh;
+  }
+  img {
+      position:absolute;
+      top:0;
+      object-fit: contain;
   }
 </style>
