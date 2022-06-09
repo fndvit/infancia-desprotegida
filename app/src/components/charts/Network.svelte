@@ -61,7 +61,6 @@
     const handleOver = (datum) => {
         selectedLinks = links.filter(d => d.id === datum.source);
         selectedNode = nodes.filter(d => d.source === datum.source);
-        console.log(datum)
     }
 
 </script> 

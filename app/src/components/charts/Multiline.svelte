@@ -1,13 +1,13 @@
 <script>
 	import Axis from '../common/Axis.svelte';
 	import PointInteractive from '../common/PointInteractive.svelte';
-	import {line, curveStep} from 'd3-shape';
+	import {line, curveMonotoneX} from 'd3-shape';
     import {scaleTime, scaleLinear} from 'd3-scale';
     import {max, extent} from 'd3-array'
     import { Delaunay } from 'd3-delaunay'
     
     export let data;
-	export let margin = {top: 20, right: 5, bottom: 20, left: 5};
+	export let margin = {top: 30, right: 5, bottom: 20, left: 5};
 	export let format;
 	export let key;
     export let color;
@@ -17,7 +17,8 @@
 
 	let datum, width, height;
     
-    const _data = key.y.map( (key, i) => data.map(d => ({x: d.time, y: d[key], key:key, color: color[i]} )))
+    const _data = key.y.map( (key, i) => data.map(d => ({x: d.time, y: d[key], key:key, color: color[i]} )));
+	const timeFrame = [...new Set(data.map(d => d.time))];
 		
 	$: x = scaleTime()
 		.domain(extent(_data.flat(), d => d.x))
@@ -30,7 +31,7 @@
 	$: path = line()
 		.x(d => x(d.x))
 		.y(d => y(d.y))
-        .curve(curveStep);
+        .curve(curveMonotoneX);
 
     $: delaunay = Delaunay.from(_data.flat(), d => x(d.x), d => y(d.y))
 
@@ -52,8 +53,8 @@
 
 </script> 
 
-<div class='graphic {layout}' bind:clientWidth={width} bind:clientHeight={height}>
-{#if width}
+<div class='{layout}' bind:clientWidth={width} bind:clientHeight={height}>
+{#if width && timeFrame}
 <svg xmlns:svg='https://www.w3.org/2000/svg' 
 	viewBox='0 0 {width} {height}'
 	{width}
@@ -73,13 +74,14 @@
 			d={path(d)}
 			stroke={d[0].color}
             fill='none'
+			stroke-width=3
             opacity={hilite(d[0].key)}
         />
         {/each}
 	</g>
 
 	<Axis {width} {height} {margin} scale={y} position='left' format={format.y} />
-	<Axis {width} {height} {margin} scale={x} position='bottom' format={format.x} />
+	<Axis {width} {height} {margin} time={timeFrame} scale={x} position='bottom' format={format.x} />
 
 	<PointInteractive {datum} {format} {x} {y} key={{x:'x', y:'y'}} {width} />
 	

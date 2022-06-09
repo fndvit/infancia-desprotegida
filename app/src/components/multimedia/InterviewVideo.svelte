@@ -34,7 +34,7 @@
     {:else}
     <Scroller bind:index bind:offset threshold=.3>
             <div class="not-interactive" slot="foreground" {id} bind:this={element}>
-                <section class="not-interactive long-text col-text"><p class="not-interactive">{header}</p></section>
+                <section class="not-interactive long-text col-text"><p class="not-interactive">&ldquo;<em>{header}</em>&rdquo;</p></section>
             </div>
             <div class="full" slot="background">
                 <Video

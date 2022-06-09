@@ -17,15 +17,13 @@
   let width, play = false;
   $: vidSize = (width < 80)
     ? 'xl'
-    : (width < 854)
+    : (width < 640)
     ? 's'
     : (width < 1280)
     ? 'm'
     : (width < 1920)
     ? 'l'
     : 'm';
-
-  $: console.log(width)
 
   const handlePlay = () => {
     time = 0;

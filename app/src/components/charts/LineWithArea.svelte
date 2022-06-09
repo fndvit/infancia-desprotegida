@@ -27,18 +27,6 @@
 		.y(d => y(d[key.y]))
 		.curve(curve);
 
-    $: area1 = area()
-		.x(d => x(d[key.x]))
-		.y0(d => y(d[key.low1]))
-		.y1(d => y(d[key.high1]))
-		.curve(curve);
-
-    $: area2 = area()
-		.x(d => x(d[key.x]))
-		.y0(d => y(d[key.low2]))
-		.y1(d => y(d[key.high2]))
-		.curve(curve);
-
 	const mouseMove = (m) => {
 		const mX = (m.offsetX) ? m.offsetX : m.clientX;
 		const _data = [...data];
@@ -69,20 +57,6 @@
 	>
 	<title id='title'>{title}</title>
 	<desc id='desc'>{desc}</desc>
-    <g>
-		<path 
-			d={area1(data)}
-			fill={color}
-            opacity={.25}
-		/>
-	</g>
-    <g>
-		<path 
-			d={area2(data)}
-			fill={color}
-            opacity={.25}
-		/>
-	</g>
 	<g>
 		<path 
 			d={path(data)}

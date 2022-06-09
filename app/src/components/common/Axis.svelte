@@ -19,7 +19,7 @@
     ? `translate(${margin.left}, 0)`
     : `translate(0, ${margin.right})`
 
-  $: ticks = scale.ticks((!time)? nTicks : time)
+  $: ticks = scale.ticks((!time)? nTicks : time.length)
     .map(d => ({value: format(d), offset: scale(d)}));
     
   $: anchor = (x) => {
@@ -78,6 +78,9 @@
 
 <style>
 	line {
-		stroke: #DCDCDC;
+		stroke: #25242699;
 	}
+  .label {
+    fill: #25242699;
+  }
 </style>

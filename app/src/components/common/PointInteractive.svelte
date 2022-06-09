@@ -67,10 +67,12 @@
 <style>
     text.tooltip {
 		paint-order: stroke;
-		stroke:#1434b1;
+		stroke:#f5d886;
 		stroke-width: 10px;
 		stroke-linecap: round;
 		stroke-linejoin: round;
         font-weight: 500;
+        fill: #252426;
+        font-size: 1.25rem;
 	}
 </style>

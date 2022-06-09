@@ -10,12 +10,14 @@
   import Network from "./components/charts/Network.svelte";
   import Credits from "./components/text/Credits.svelte";
   import Grid from "./components/multimedia/Grid.svelte";
+  import LineChart from "./components/LineChart.svelte";
 
   export let content, meta;
 
   let y;
 
   let chapter = {};
+
   $: currentChapter = Object.values(chapter).findIndex((d) => d.pos > y + 200);
   $: currentChapterId =
     currentChapter === -1
@@ -31,6 +33,7 @@
     intro: Intro,
     text: Text,
     video: InterviewVideo,
+    linechart: LineChart,
     chapter: Chapter,
     "chapter-video": ChapterVideo,
     notes: Notes,
@@ -40,6 +43,8 @@
     "spiral-violence": SpiralViolence,
     credits: Credits
   };
+
+
 </script>
 
 <svelte:window bind:scrollY={y} />

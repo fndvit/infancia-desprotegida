@@ -13,9 +13,9 @@
 
 </script>
 
-<div class='{id !== 'ara' ? 'chapter-wrapper' : 'short'}'>
-    <section class='full chapter {id !== 'ara' ? '' : 'short'}' {id} bind:this={element}>
-        {#if id !== 'ara'}<img class="full" src="img/{src}.gif" alt="" />{/if}
+<div class='chapter-wrapper'>
+    <section class='full chapter' {id} bind:this={element}>
+        <img class="full" src="img/{src}.gif" alt="" />
         <div class='header-wrapper'><h2 class='col-text'>{@html header}</h2></div>
     </section>
 </div>
@@ -27,7 +27,7 @@
       width: 100%;
   }
   .chapter-wrapper {
-    height: 50vh;
+    height: 35vh;
     padding-bottom:3rem;
   }
   .short {
@@ -35,7 +35,7 @@
     margin-bottom:1.5rem;
   }
   .full {
-    height: 50vh;
+    height: 35vh;
   }
   img {
       position:absolute;
