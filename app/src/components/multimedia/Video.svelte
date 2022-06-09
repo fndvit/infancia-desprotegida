@@ -15,13 +15,17 @@
   export let paused;
 
   let width, play = false;
-  $: vidSize = (width < 854)
+  $: vidSize = (width < 80)
+    ? 'xl'
+    : (width < 854)
     ? 's'
     : (width < 1280)
     ? 'm'
     : (width < 1920)
     ? 'l'
-    : 'xl';
+    : 'm';
+
+  $: console.log(width)
 
   const handlePlay = () => {
     time = 0;
@@ -41,7 +45,7 @@
   }
 
 </script>
-<div class={layout} bind:clientWidth={width}>
+<div class='{layout}' bind:clientWidth={width}>
 <video
   bind:currentTime={time}
   bind:duration

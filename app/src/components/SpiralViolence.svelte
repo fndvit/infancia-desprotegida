@@ -5,7 +5,7 @@
 
   export let text;
 
-  let dots = text.map((d) => d.data / 100);
+  let dots = text.map((d,i) => i === 0 ? 4 : d.data / 100);
   let range = text.map((d) => d.range);
 
   let width, height;
@@ -22,8 +22,8 @@
   $: data = [...new Array(n)].map((d, i) => {
     const z = Math.sqrt(i / n);
     const theta = i * 2.4;
-    const x = width / 2 + (z * Math.cos(theta) * height) / 2;
-    const y = height / 2 + (z * Math.sin(theta) * height) / 2;
+    const x = width / 2 + (z * Math.cos(theta) * width * .8) / 2;
+    const y = height / 2 + (z * Math.sin(theta) * height * .8) / 2;
     const r = scaleRadius(n);
     return { x: x, y: y, r: r };
   });
@@ -56,6 +56,7 @@
     padding-bottom: 10rem;
   }
   section {
+    padding-top:30vh;
     height: 100vh;
   }
   .graphic {

@@ -9,15 +9,6 @@
 
   let video, currentTime;
 
-  let picked = null,
-    click = false;
-
-  $: delaunay = Delaunay.from(
-    data,
-    (d) => d.x,
-    (d) => d.y
-  );
-
 </script>
 
 <!-- svelte-ignore a11y-media-has-caption -->
@@ -34,10 +25,6 @@
   {width}
   {height}
   style="cursor: pointer"
-  on:mousemove={({ offsetX: x, offsetY: y }) => (picked = delaunay.find(x, y))}
-  on:mouseout={() => (picked = null)}
-  on:mousedown={() => (click = true)}
-  on:mouseup={() => (click = false)}
 >
   {#each data as d, i}
     <MiniVideo x={d.x} y={d.y} size={d.r} {video} {currentTime} />

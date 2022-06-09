@@ -1,9 +1,8 @@
 <script>
-	import {linkVertical} from 'd3-shape';
+	import {linkVertical, curveStep} from 'd3-shape';
     import {scaleOrdinal, scaleLinear} from 'd3-scale';
     import data from '../../data/xarxa.json';
     import {extent, group} from 'd3-array';
-    import { fade } from 'svelte/transition';
     
 	export let margin = {top: 50, right: 5, bottom: 20, left: 5};
 	export let title;
@@ -21,7 +20,7 @@
 		.domain(extent(data, (d) => d.level))
 		.range([margin.top, height - margin.bottom - margin.top]);
 
-    $: radius = width / 50;
+    $: radius = width / 40;
 
     $: _n = [...new Set(data.map(d => d.source))]
         .map(d => data.find(e => e.source === d))
@@ -47,10 +46,10 @@
         }
     }).filter(d => d !== undefined);
 
-    $:selected = links;
+    $:selectedLinks = [];
+    $:selectedNode = []
 
-
-    $: linkPath = linkVertical()
+    $: linkPath = linkVertical(curveStep)
         .source((d) => d.source)
         .target((d) => d.target)
 
@@ -60,7 +59,9 @@
 	// 	.y1(d => y(d[key.y]))
 
     const handleOver = (datum) => {
-        selected = links.filter(d => d.id === datum.source);
+        selectedLinks = links.filter(d => d.id === datum.source);
+        selectedNode = nodes.filter(d => d.source === datum.source);
+        console.log(datum)
     }
 
 </script> 
@@ -80,8 +81,13 @@
         <marker id="arrowhead" viewBox="0 0 4 4" refX="2" refY="2"
         markerWidth="3" markerHeight="3"
         orient="auto-start-reverse">
-      <path d="M 0 0 L 3 2 L 0 4 z" fill="#abd4ff" />
-    </marker>
+            <path d="M 0 0 L 3 2 L 0 4 z" fill="#abd4ff" />
+        </marker>
+        <marker id="arrowheadwhite" viewBox="0 0 4 4" refX="2" refY="2"
+        markerWidth="3" markerHeight="3"
+        orient="auto-start-reverse">
+            <path d="M 0 0 L 3 2 L 0 4 z" fill="#fff" />
+        </marker>
     </defs>
     <g>
         {#each links as link}
@@ -96,18 +102,18 @@
         {/each}
 	</g>
     <g>
-        {#each selected as link}
+        {#each selectedLinks as link}
 		<path 
             d={linkPath(link)}
             stroke='#fff'
             opacity={1}
             stroke-width=5
             fill='none'
-            marker-end="url(#arrowhead)"
+            marker-end="url(#arrowheadwhite)"
 		/>
         {/each}
 	</g>
-	<g>
+    <g>
         {#each nodes as node}
 		<circle 
             cx={node.cx}
@@ -116,6 +122,18 @@
             stroke='none'
             fill='#abd4ff'
             on:mouseover={() => handleOver(node)}
+		/>
+        {/each}
+	</g>
+    <g>
+        {#each selectedNode as node}
+		<circle 
+            cx={node.cx}
+            cy={node.cy}
+            r={radius}
+            stroke='none'
+            fill='#fff'
+            class='not-interactive'
 		/>
         {/each}
 	</g>
@@ -148,10 +166,13 @@
         position: absolute;
         margin:0;
         padding:0;
-        font-size: .9rem;
+        font-size: .8rem;
         line-height: 1.2;
         text-align: center;
         font-family: 'Montserrat' sans-serif;
         color: #252426;
+    }
+    .not-interactive {
+        pointer-events: none;
     }
 </style>
