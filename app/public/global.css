@@ -153,6 +153,9 @@ h4 {
 video {
   transition: opacity 0.3s;
 }
+.mini {
+  width:calc(33% - 1rem);
+}
 
 canvas {
   width: 100%;

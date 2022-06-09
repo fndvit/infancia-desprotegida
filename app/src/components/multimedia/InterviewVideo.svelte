@@ -79,6 +79,8 @@
     }
     .title {
         position: absolute;
+        top: 3rem;
+        z-index: 100;
         margin: 0;
         padding:0;
         padding-left:1rem;
@@ -87,6 +89,7 @@
         height: 6rem;
         color: #fff;
         background: linear-gradient(180deg, rgba(37,36,38,.7) 0%, rgba(37,36,38,0) 70%);
+        pointer-events: none;
     }
     .interview {
         transition: opacity .5s;

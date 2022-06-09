@@ -3,8 +3,9 @@
     import {scaleOrdinal, scaleLinear} from 'd3-scale';
     import data from '../../data/xarxa.json';
     import {extent, group} from 'd3-array';
+    import { fade } from 'svelte/transition';
     
-	export let margin = {top: 20, right: 5, bottom: 20, left: 5};
+	export let margin = {top: 50, right: 5, bottom: 20, left: 5};
 	export let title;
 	export let desc;
 	let layout = 'full';
@@ -12,7 +13,9 @@
 	let width, height;
 
     $: x = scaleLinear()
+        .domain([1,25])
 		.range([margin.left, width - margin.left - margin.right]);
+
 	
 	$: y = scaleLinear()
 		.domain(extent(data, (d) => d.level))
@@ -23,32 +26,28 @@
     $: _n = [...new Set(data.map(d => d.source))]
         .map(d => data.find(e => e.source === d))
 
-    $: levels = group(_n, (d) => d.level);
-
     $: nodes = _n.map(d => {
-
-            let l = levels.get(d.level)
-            x.domain([0, l.length])
-            let i = l.indexOf(d)
-            
             return {
                 source: d.source,
                 cy: y(d.level),
-                cx: x(i),
+                cx: x(d.col),
             }
         });
     
     $: links = data.map(d => {
-        let source = nodes.find(e => e.source === d.source)
+        let source = nodes.find(e => e.source === d.source);
         let target = nodes.find(e => e.source === d.target);
 
         if (target){
             return {
-                source: [source.cx, source.cy - radius],
-                target: [target.cx, target.cy - radius],
+                id: source.source,
+                source: [source.cx, source.cy + radius],
+                target: [target.cx, target.cy - radius - 10],
             }
         }
     }).filter(d => d !== undefined);
+
+    $:selected = links;
 
 
     $: linkPath = linkVertical()
@@ -59,6 +58,10 @@
 	// 	.x(d => x(d[key.x]))
 	// 	.y0(d => y(0))
 	// 	.y1(d => y(d[key.y]))
+
+    const handleOver = (datum) => {
+        selected = links.filter(d => d.id === datum.source);
+    }
 
 </script> 
 
@@ -74,38 +77,81 @@
 	<title id='title'>{title}</title>
 	<desc id='desc'>{desc}</desc>
     <defs>
-        <marker id="arrowhead" markerWidth="6" markerHeight="6" refX="0" refY="3" orient="auto">
-          <polygon points="0 0, 10 3.5, 0 7" fill="#fff"/>
-        </marker>
+        <marker id="arrowhead" viewBox="0 0 4 4" refX="2" refY="2"
+        markerWidth="3" markerHeight="3"
+        orient="auto-start-reverse">
+      <path d="M 0 0 L 3 2 L 0 4 z" fill="#abd4ff" />
+    </marker>
     </defs>
+    <g>
+        {#each links as link}
+		<path 
+            d={linkPath(link)}
+            stroke='#abd4ff'
+            opacity={.7}
+            stroke-width=5
+            fill='none'
+            marker-end="url(#arrowhead)"
+		/>
+        {/each}
+	</g>
+    <g>
+        {#each selected as link}
+		<path 
+            d={linkPath(link)}
+            stroke='#fff'
+            opacity={1}
+            stroke-width=5
+            fill='none'
+            marker-end="url(#arrowhead)"
+		/>
+        {/each}
+	</g>
 	<g>
         {#each nodes as node}
 		<circle 
             cx={node.cx}
             cy={node.cy}
             r={radius}
-            stroke='#fff'
-		/>
-        {/each}
-	</g>
-    
-	<g>
-        {#each links as link}
-		<path 
-            d={linkPath(link)}
-            stroke='#fff'
-            stroke-width=4
-            fill='none'
-            marker-end="url(#arrowhead)"
+            stroke='none'
+            fill='#abd4ff'
+            on:mouseover={() => handleOver(node)}
 		/>
         {/each}
 	</g>
 </svg>
+<div class="annotations">
+    {#each nodes as node}
+		<p class="label" style="width: {radius * 2}px; top: {node.cy - radius / 2}px; left: {node.cx - radius}px; text-align:center">{node.source}</p>
+    {/each}
+</div>
+
 {/if}
 </div>
 
 <style>
     .graphic {
-        height:100vh;
+        height:200vh;
+        position:relative;
+        width:calc(100% - 10rem);
+        margin: 0 auto;
+    }
+    .annotations {
+        position: absolute;
+        pointer-events: none;
+        width:calc(100% - 10);
+        height:calc(100% - 70);
+        top:0;
+        left:5px;
+    }
+    .label {
+        position: absolute;
+        margin:0;
+        padding:0;
+        font-size: .9rem;
+        line-height: 1.2;
+        text-align: center;
+        font-family: 'Montserrat' sans-serif;
+        color: #252426;
     }
 </style>

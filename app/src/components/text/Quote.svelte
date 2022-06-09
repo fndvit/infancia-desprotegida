@@ -21,12 +21,14 @@
      .quote p { 
         font-size: 1.25rem;
         line-height: 1.8;
-        color: #FFFFFFCC;
     }
      .cite {
         font-family: 'Bitter', serif;
         font-size: 1.25rem;
         line-height: 1.8;
         padding: 2rem 6rem 2rem 0;
+     }
+     .quote p, .cite {
+      color: #FFFFFFCC;
      }
 </style>

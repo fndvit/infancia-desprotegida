@@ -18,5 +18,5 @@ do
     ffmpeg -i "$FILE" -vf scale=1920:1080 -c:a copy -c:v libx264 -preset slow -crf 32 -y $OUT/${NEW_NAME}_xl.mp4
     ffmpeg -i "$FILE" -vf scale=1280:720 -c:a copy -c:v libx264 -preset slow -crf 32 -y $OUT/${NEW_NAME}_l.mp4
     ffmpeg -i "$FILE" -vf scale=854:480 -c:a copy -c:v libx264 -preset slow -crf 32 -y $OUT/${NEW_NAME}_m.mp4
-    ffmpeg -i "$FILE" -vf scale=-1:480,crop=in_w/3:in_h:in_w/3:0 -c:a copy -c:v libx264 -preset slow -crf 32 -y $OUT/${NEW_NAME}_s.mp4
+    ffmpeg -i "$FILE" -vf scale=480:270 -c:a copy -c:v libx264 -preset slow -crf 32 -y $OUT/${NEW_NAME}_s.mp4
 done

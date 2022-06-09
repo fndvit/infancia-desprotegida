@@ -9,6 +9,7 @@
   import SpiralViolence from "./components/SpiralViolence.svelte";
   import Network from "./components/charts/Network.svelte";
   import Credits from "./components/text/Credits.svelte";
+  import Grid from "./components/multimedia/Grid.svelte";
 
   export let content, meta;
 
@@ -35,6 +36,7 @@
     notes: Notes,
     quote: Quote,
     network: Network,
+    grid: Grid,
     "spiral-violence": SpiralViolence,
     credits: Credits
   };

@@ -10,6 +10,9 @@
   export let duration;
   export let layout;
   export let controls = 'controls';
+  export let index;
+  export let id;
+  export let paused;
 
   let width, play = false;
   $: vidSize = (width < 854)
@@ -23,19 +26,26 @@
   const handlePlay = () => {
     time = 0;
     play = true;
+    index = id;
     video.muted = false;
     video.loop = false;
   }
 
+  $:if(paused) {
+    play = false;
+    if (video) {
+      video.pause();
+      video.muted = true;
+      video.loop = true;
+    }
+  }
+
 </script>
-
-<svelte:window bind:innerWidth={width} />
-
+<div class={layout} bind:clientWidth={width}>
 <video
   bind:currentTime={time}
   bind:duration
   bind:this = {video}
-  class={layout}
   preload='auto'
   poster='img/{src}.jpg'
   src='video/{src}_{vidSize}.mp4'
@@ -53,7 +63,7 @@
 {#if !play && audible}
 <div class="sound" transition:fade on:click="{() => handlePlay()}"></div>
 {/if}
-
+</div>
 <style>
   .sound {
     pointer-events: all;
