@@ -3,7 +3,7 @@
 
 # Infància (des)protegida
 
-[Premi Montserrat Roig 2019](https://www.barcelona.cat/infobarcelona/ca/tema/ajuntament/premis-montserrat-roig-2019-al-periodisme-i-la-comunicacio-social_1011372.html), atorgat per l’Ajuntament de Barcelona.
+##### [Premi Montserrat Roig 2019](https://www.barcelona.cat/infobarcelona/ca/tema/ajuntament/premis-montserrat-roig-2019-al-periodisme-i-la-comunicacio-social_1011372.html), atorgat per l’Ajuntament de Barcelona.
 
 Aquest reportatge explora el patiment dels infants quan són víctimes de maltractaments psicològics, físics i abusos sexuals dins de l’entorn familiar. La violència masclista és, sovint, el detonant.
 
