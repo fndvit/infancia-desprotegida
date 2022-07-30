@@ -21,10 +21,10 @@ molt més que la punta de l'iceberg sobre la violència masclista a Catalunya. Q
 Es pot dir, doncs, que «Infància (des)protegida» és una segona part del «Desprotegides, malgrat tot», perquè bona part de la violència física i sexual que pateixen els infants s'origina en llars on la violència masclista està molt present. Aprofundint en la problemàtica, vam entrar en contacte amb històries molt doloroses que sovint romanen ocultes: els menors guarden silenci perquè no saben quin adult del seu entorn pot ajudar-los.
 
 ## Metodologia
+Totes les fonts consultades coincideixen en la complexitat de trobar dades sobre la violència a menors (física i sexual) a Catalunya perquè fins fa poc no es recollien. Bé, perquè la gran majoria dels casos es desconeixen, mai surten a la llum. 
+Save the Children explicita en el seu informe que només es notifiquen a la policia o jutjats [1 de cada 10 abusos sexuals a menors!](https://www.savethechildren.es/sites/default/files/imce/docs/sota-el-mateix-sostre-web-doble.pdf) I que 7 de cada 10 casos denunciats, no arriben a judici per manca de proves.
+D'altra banda, les dades sovint són recollides amb criteris diferents pels serveis assistencials: salut, escola, Mossos, serveis socials, etc).
 
-Cercar dades sobre la violència física i sexual de menors és una àrdua tasca perquè... 
-  1) La gran majoria dels casos es desconeixen, mai surten a la llum. Només es notifiquen a la policia o jutjats [1 de cada 10 abusos sexuals a menors!](https://www.savethechildren.es/sites/default/files/imce/docs/sota-el-mateix-sostre-web-doble.pdf) I 7 de cada 10 casos denunciats, no arriben a judici per manca de proves.
-  2) Els pocs que es coneixen, són recollits amb criteris diferents pels serveis assistencials (salut, escola, Mossos, serveis socials, etc)
-  
-En aquest reportatge hem treballat amb les fonts de Mossos d'Esquadra 
+No obstant això, la lectura de nombrosa documentació sobre la violència als infants (Informes del Síndic de Greuges, Informes de l'ONG Save the Children, avaluacions de polítiques públiques, protocols, macroenquestes, compilacions de disposicions legals, i dossiers estadístics, entre altres) delata que els titulars dels mitjans es queden molt curts i que només mostren la punta de l'iceberg d'aquest drama social. 
+Confiem que el gràfic circular es fa cada cop més gran en baixar l'<em>scroll</em> fins a donar la xifra estimada de 87.338 menors, ajudi a entendre la urgència per dotar de recursos i millor coordinació els serveis públics.
   
