@@ -33,7 +33,13 @@ Hem analitzat dades dels Mossos d'Esquadra, de la Direcció General d'Atenció a
 El gràfic conclou amb l'estimació de més de 87 mil infants i adolescents a Catalunya que pateixen maltractaments físics i/o abusos sexuals. La base està en tres documents: 1) La tesis doctoral:["Menores testigos de violencia entre sus progenitores: repercusiones a nivel psicoemocional"](https://violenciagenero.igualdad.gob.es/va/violenciaEnCifras/estudios/Tesis/estudios/Tesis5_Menores_Testigos_Violencia.htm), elaborat per l'experta en violència de gènere i psicologia infantil Sandra Carracedo Cortiñas. 2) L'Informe sobre l’Estat dels Serveis Socials a Catalunya i 3) La [macroenquesta de violència de gènere](https://violenciagenero.igualdad.gob.es/violenciaEnCifras/macroencuesta2015/Macroencuesta2019/home.htm) (2019), elaborada pel Ministeri d'Igualtat del govern espnayol. 
 Ens hagués agradat comptar amb les conclusions de l'Enquesta de Violència Masclista del Departament d'Interior actualitzada. Però la Generealitat té un deute pendent amb aquest estudi, perquè l'última enquesta disponible és del 2016.  
 
-** Entrevistes
+## Entrevistes
+
+Agraïm moltíssim el relat del nen Marc, així com el de Lola i Alba (tots tres noms ficticis) per la valentia d'explicar els seus inferns.  
+
+Hem realitzat més d'una trentena d'entrevistes a professionals dedicats a atendre a menors i adolescents que són abusats sexualment o maltractats psicològica i físicament que treballen en serveis assistencials: cases d’acollida, Serveis d’Intervenció Especialitzada (SIEs), EAIAs, centres de menors i serveis socials que van donar-nos context. La gran majoria ens van demanar l'anonimat per temor a perdre la feina o tenir repercursions en el seu entorn laboral. 
+
+Amb càmera de vídeo vam entrevistar a les persones responsables de l'administració catalana, perquè donessin respostes a les múltiples preguntes que es fan les víctimes d'aquests casos d'abusos, o els familiars més propers.
 
  
   
