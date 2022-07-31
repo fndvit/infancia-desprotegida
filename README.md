@@ -43,9 +43,9 @@ Amb càmera de vídeo vam entrevistar a les persones responsables de l'administr
 
 ## Dades i documents
 
-## Sobre el disseny
+## Sobre el disseny 😎  
 
-## L'equip
+## L'equip 😍
 
 Karma Peiró és una periodista i docent catalana especialitzada en internet i el periodisme de dades. Va ser directora de Nació Digital des del juliol de 2015 fins a l'abril de 2018. Abans va ocupar càrrecs de responsabilitat a la revista Web, en.red.ando, La Vanguardia Digital i TV3.
 
