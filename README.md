@@ -41,5 +41,10 @@ Hem realitzat més d'una trentena d'entrevistes a professionals dedicats a atend
 
 Amb càmera de vídeo vam entrevistar a les persones responsables de l'administració catalana, perquè donessin respostes a les múltiples preguntes que es fan les víctimes d'aquests casos d'abusos, o els familiars més propers.
 
- 
+## Els documents i dades
+
+## Sobre el disseny
+
+## L'equip
+
   
