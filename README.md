@@ -1,4 +1,4 @@
-#### Read in [English](....)
+#### Read in [English](https://github.com/fndvit/infancia-desprotegida/blob/main/README.md))
 
 
 # Infància (des)protegida
@@ -47,4 +47,26 @@ Amb càmera de vídeo vam entrevistar a les persones responsables de l'administr
 
 ## L'equip
 
+---
+
+#### Llegueix en [català](https://github.com/xaquingv/desprotegides#read-in-english)
+
+## Methodology
   
+## Data and documents
+
+## About the design 😎  
+## The team 😍
+
+Karma Peiró is a data journalist and instructor from Catalunya. She was the editor in chief at Nació Digital between 2015 and 2018. Before that, she worked and lead teams at Web Magazine, en.red.ando, Catalunya Ràdio, La Vanguardia Digital, and TV3.
+
+Francina Cortés
+
+
+Rocío Minvielle is a documentary filmmaker, producer, and feminist activist. She’s a member of the insurRECtas collective.
+
+
+Xaquín G.V. is an interactive, data and visual journalist from Galicia. Between 2014 and 2017, he led the Visuals desk at The Guardian in London. Before that, he worked at National Geographic, The New York Times, Newsweek and El Mundo (Spain).
+
+
+
