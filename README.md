@@ -22,7 +22,9 @@ Es pot dir, doncs, que «Infància (des)protegida» és una segona part del «De
 
 ## Metodologia
 La lectura de nombrosa documentació sobre la violència als infants (Informes, avaluacions de polítiques públiques, protocols, macroenquestes, compilacions de disposicions legals, dossiers estadístics i legislació catalana, estatal i europea) delata que els titulars dels mitjans es queden molt curts i que només mostren la punta de l'iceberg d'aquest drama social. 
+
 Totes les fonts consultades coincideixen en la complexitat de trobar dades sobre la violència a menors (física i sexual) a Catalunya. La detecció dels casos reals de maltractament infantil és complexa i es desconeix la prevalença real dels maltractraments. 
+
 * La gran majoria dels casos es desconeixen, mai surten a la llum. Segons l'organització Save the Children només es notifiquen a la policia o jutjats [1 de cada 10 abusos sexuals a menors!](https://www.savethechildren.es/sites/default/files/imce/docs/sota-el-mateix-sostre-web-doble.pdf) I que 7 de cada 10 casos denunciats, no arriben a judici per manca de proves.
 * D'altra banda, sovint les poques dades existents s'agafen amb criteris diferents pels serveis assistencials: salut, escola, Mossos, serveis socials, etc). Segons l’[Informe sobre l’Estat dels Serveis Socials a Catalunya (2020)](https://dretssocials.gencat.cat/web/.content/03ambits_tematics/15serveissocials/sistema_catala_serveis_socials/documents/informe_estat_serveis_socials/Informe-sobre-lestat-dels-serveis-socials-2020.pdf): “Les dades disponibles es basen en població detectada (registrada en expedients dels serveis socials i en denúncies policials) i, per tant, subestimen el nombre de casos.”  “A l’Estat espanyol, la prevalença se situaria entorn del 15%. A Catalunya, la incidència del maltractament a infants i adolescents oscil·la entre un **5,4%** i un **18%**. L’interval és ampli degut a que s’utilitzen criteris diferents en la conceptualització i estimacions”.
 
