@@ -41,11 +41,19 @@ Hem realitzat més d'una trentena d'entrevistes a professionals dedicats a atend
 
 Amb càmera de vídeo vam entrevistar a les persones responsables de l'administració catalana, perquè donessin respostes a les múltiples preguntes que es fan les víctimes d'aquests casos d'abusos, o els familiars més propers.
 
-## Els documents i dades
+## Dades i documents
 
 ## Sobre el disseny
 
 ## L'equip
+
+Karma Peiró és una periodista i docent catalana especialitzada en internet i el periodisme de dades. Va ser directora de Nació Digital des del juliol de 2015 fins a l'abril de 2018. Abans va ocupar càrrecs de responsabilitat a la revista Web, en.red.ando, La Vanguardia Digital i TV3.
+
+Francina Cortés 
+
+Rocío Minvielle és una documentalista audiovisual, productora, activista feminista i part del col·lectiu insurRECtas.
+
+Xaquín G.V. és un periodista de dades i editor visual gallec. Entre 2014 i 2017, va dirigir l'equip de Visuals de The Guardian a Londres. Abans va treballar a National Geographic, The New York Times, Newsweek i El Mundo (Espanya).
 
 ---
 
