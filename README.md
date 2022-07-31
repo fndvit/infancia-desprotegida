@@ -25,8 +25,11 @@ Totes les fonts consultades coincideixen en la complexitat de trobar dades sobre
 Save the Children explicita en el seu informe que només es notifiquen a la policia o jutjats [1 de cada 10 abusos sexuals a menors!](https://www.savethechildren.es/sites/default/files/imce/docs/sota-el-mateix-sostre-web-doble.pdf) I que 7 de cada 10 casos denunciats, no arriben a judici per manca de proves.
 D'altra banda, les dades sovint són recollides amb criteris diferents pels serveis assistencials: salut, escola, Mossos, serveis socials, etc).
 
-No obstant això, la lectura de nombrosa documentació sobre la violència als infants (Informes, avaluacions de polítiques públiques, protocols, macroenquestes, compilacions de disposicions legals, dossiers estadístics i legislació catalana, estatal i europea) delata que els titulars dels mitjans es queden molt curts i que només mostren la punta de l'iceberg d'aquest drama social. 
+No obstant això, la lectura de nombrosa documentació sobre la violència als infants (Informes, avaluacions de polítiques públiques, protocols, macroenquestes, compilacions de disposicions legals, dossiers estadístics i legislació catalana, estatal i europea) delata que els titulars dels mitjans es queden molt curts i que només mostren la punta de l'iceberg d'aquest drama social. La cerca de dades ha estat basada en l'any 2021 — tenint en compte que el 2020 va ser un any excepcional, en quant a la recollida de dades perquè el país es va paralitzar a causa de la Covid-19-. Igualment, s'han fet comparacions temporals amb la darrera dècada (2011-21). Hem analitzat dades dels Mossos d'Esquadra, de la Direcció General d'Atenció a la Infància i Adolescència (DGAIA), del departament de Salut, de l’Institut Català de les Dones i de múltiples enquestes. 
+
+Per a l'estimació del gràfic circular que utilizem per donar la xifra de <strong>87.338 menors</strong>
+
 Confiem que el gràfic circular es fa cada cop més gran en baixar l'<em>scroll</em> fins a donar la xifra estimada de <strong>87.338 menors</strong>, ajudi a entendre la urgència per dotar de recursos i millor coordinació els serveis públics.
 
-La cerca de dades ha estat basada en l'any 2021 — tenint en compte que el 2020 va ser un any excepcional, en quant a la recollida de dades perquè el país es va paralitzar a causa de la Covid-19-. Igualment, s'han fet comparacions temporals amb la darrera dècada (2011-21). Hem analitzat dades dels Mossos d'Esquadra, de la Direcció General d'Atenció a la Infància i Adolescència (DGAIA), del departament de Salut, de l’Institut Català de les Dones i de múltiples enquestes. 
+
   
