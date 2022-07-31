@@ -1,4 +1,4 @@
-#### Read in [English](https://github.com/fndvit/infancia-desprotegida/blob/main/README.md))
+#### Read in [English](https://github.com/fndvit/infancia-desprotegida/#read-in-english)
 
 
 # Infància (des)protegida
@@ -49,7 +49,7 @@ Amb càmera de vídeo vam entrevistar a les persones responsables de l'administr
 
 ---
 
-#### Llegueix en [català](https://github.com/xaquingv/desprotegides#read-in-english)
+#### Llegueix en [català](https://github.com/fndvit/infancia-desprotegida/blob/main/README.md) 
 
 ## Methodology
   
