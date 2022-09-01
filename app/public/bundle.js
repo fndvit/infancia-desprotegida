@@ -16254,9 +16254,9 @@ var app = (function () {
     			img = element("img");
     			if (img.src !== (img_src_value = "img/" + /*src*/ ctx[0] + "_" + /*imgSize*/ ctx[4] + "." + /*format*/ ctx[2])) attr_dev(img, "src", img_src_value);
     			attr_dev(img, "alt", /*alt*/ ctx[1]);
-    			attr_dev(img, "class", "svelte-a3cgvs");
+    			attr_dev(img, "class", "svelte-18wasr");
     			add_location(img, file$1, 13, 0, 191);
-    			attr_dev(div, "class", "svelte-a3cgvs");
+    			attr_dev(div, "class", "svelte-18wasr");
     			add_render_callback(() => /*div_elementresize_handler*/ ctx[6].call(div));
     			add_location(div, file$1, 12, 0, 160);
     		},

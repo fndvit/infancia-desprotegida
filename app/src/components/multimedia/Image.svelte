@@ -18,8 +18,9 @@
 </div>
 <style>
     div {
-      width:100%;
+      width:90%;
       height: auto;
+      margin: 0 auto
     }
     img {
         vertical-align: middle;
