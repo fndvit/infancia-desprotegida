@@ -97,7 +97,7 @@ const toggle = () => {
           {#if i%2 === 0 || i > 5}
           <p class="intro">{@html p.p}</p>
           {:else}
-          <p class="intro" on:click="{() => handlePlay()}">{@html p.p}
+          <p class="intro pointer" on:click="{() => handlePlay()}">{@html p.p}
             {#if index % 2}
             <div class="sound"></div>
             {/if}
@@ -118,6 +118,9 @@ const toggle = () => {
   }
   .interactive {
     pointer-events: all;
+  }
+  .pointer { 
+    cursor: pointer;
   }
   .sound {
     float: left;

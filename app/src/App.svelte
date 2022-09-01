@@ -11,6 +11,8 @@
   import Credits from "./components/text/Credits.svelte";
   import Grid from "./components/multimedia/Grid.svelte";
   import LineChart from "./components/LineChart.svelte";
+  import SmallChapter from "./components/text/SmallChapter.svelte";
+  import Image from "./components/multimedia/Image.svelte";
 
   export let content, meta;
 
@@ -41,7 +43,9 @@
     network: Network,
     grid: Grid,
     "spiral-violence": SpiralViolence,
-    credits: Credits
+    credits: Credits,
+    "small-chapter": SmallChapter,
+    photo: Image
   };
 
 
