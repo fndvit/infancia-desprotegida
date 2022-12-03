@@ -21,6 +21,6 @@ jobs:
         with:
           node-version: 16.x
       - name: Install and configure
-        run: cd app && npm install && npm run gdocs && npm run build
+        run: cd app && npm install && npm run build
       - name: Deploy
         run: aws s3 sync ./app/public s3://infanciadesprotegida.com
