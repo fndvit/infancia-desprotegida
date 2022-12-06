@@ -1,0 +1,16 @@
+[
+    {
+        "id": "1JLIBMJpROtFn_gIxD_QEzwQg47TTYxBy2eWfF5lhh1Q",
+        "dest": "src/data/story"
+    },
+    {
+        "id": "1uB1mDEGIUZvjfdV9MJMHPrFNnnoi5mnOaZQ_ng_Mwws",
+        "gid": "0",
+        "dest": "src/data/xarxa"
+    },
+    {
+        "id": "1rykcLtVprblTZyehF-1-yy2pzC_Tts8nnRERHEPCMRs",
+        "gid": "0",
+        "dest": "src/data/trobada"
+    }
+]

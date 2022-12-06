@@ -2,7 +2,6 @@
 app/node_modules/
 app/public/build/
 app/public/
-app/gdocs.json
 /video-processing/
 
 .DS_Store
