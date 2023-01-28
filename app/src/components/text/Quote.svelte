@@ -14,13 +14,14 @@
 
 <style>
     .quote { 
-        margin: 2rem -3rem;
-        padding: 2rem 3rem 3rem 3rem;
+        margin: 0;
+        padding: 1.5rem 1rem;
         background-color: #00000088;
      }
      .quote p { 
         font-size: 1.25rem;
         line-height: 1.8;
+        font-style: italic;
     }
      .cite {
         font-family: 'Bitter', serif;
@@ -30,5 +31,14 @@
      }
      .quote p, .cite {
       color: #FFFFFFCC;
+     }
+     @media screen and (min-width: 48rem) {
+      .quote p { 
+        font-style:normal
+    }
+      .quote { 
+        margin: 2rem -3rem;
+        padding: 2rem 3rem 3rem 3rem;
+      }
      }
 </style>

@@ -26,12 +26,10 @@ const boldFirst = (text) => {
   return `<strong>${first}</strong> ${rest.join(' ')}`;
 };
 
-let width, play = false;
-  $: vidSize = (width < 854)
-    ? 's'
-    : (width < 1280)
+let height, play = false;
+  $: vidSize = (height < 640)
     ? 'm'
-    : (width < 1920)
+    : (height < 720)
     ? 'l'
     : 'xl';
 
@@ -46,14 +44,14 @@ let width, play = false;
   }
 
 $:muted = (active && play) ? false : 'muted';
-
-const toggle = () => {
-  console.log('hola!')
-}
+let vh;
+$:top = 16/vh;
 
 </script>
-<Scroller bind:index bind:offset threshold=.3>
-  <div class="chapter interactive" slot="background">
+<svelte:window bind:innerHeight={vh}/>
+
+<Scroller bind:index bind:offset threshold=.3 top={top}>
+  <div class="chapter interactive" slot="background" bind:clientHeight={height}>
       <div class="full absolute">
         <Photo
             src={poster}
@@ -61,13 +59,6 @@ const toggle = () => {
         />
       </div>
       <div class="full absolute">
-        <!-- <Video
-            {src}
-            layout = '{layout} {fade}'
-            controls = ''
-            scroll = false
-            {audible}
-        /> -->
         <video
           bind:currentTime={time}
           bind:duration
@@ -97,10 +88,11 @@ const toggle = () => {
           {#if i%2 === 0 || i > 5}
           <p class="intro">{@html p.p}</p>
           {:else}
-          <p class="intro pointer" on:click="{() => handlePlay()}">{@html p.p}
+          <p class="intro pointer" on:click="{() => handlePlay()}">
             {#if index % 2}
             <div class="sound"></div>
             {/if}
+            {@html p.p}
           </p>
           {/if}
         </div>
@@ -140,10 +132,14 @@ const toggle = () => {
   p {
     padding: 2rem;
     margin: 0;
+    font-size: 1.3rem;
+  }
+  @media screen and (min-width: 48rem) {
+    p {
+    padding: 2rem;
+    margin: 0;
     font-size: 1.5rem;
   }
-  h1 {
-    padding:6rem;
   }
   .intro {
     background-color: #252426AA;

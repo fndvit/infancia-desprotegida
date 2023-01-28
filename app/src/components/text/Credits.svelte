@@ -18,7 +18,8 @@ export let update;
     font-family: 'Montserrat', serif;
     font-weight: bold;
     font-size: .9rem;
-    margin: 0;
+    margin-top:0;
+    margin-bottom: 0;
   }
   .small {
     font-size: .85rem;

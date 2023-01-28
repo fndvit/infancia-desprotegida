@@ -48,6 +48,7 @@
   bind:currentTime={time}
   bind:duration
   bind:this = {video}
+  class={layout}
   preload='auto'
   poster='img/{src}.jpg'
   src='video/{src}_{vidSize}.mp4'

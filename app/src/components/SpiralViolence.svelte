@@ -61,7 +61,7 @@
   }
   .graphic {
     height: 100vh;
-    width: 100vw;
+    width: 100%;
   }
   p {
     width: 50%;

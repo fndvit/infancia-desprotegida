@@ -14,9 +14,13 @@
 
     let element, index = 0, offset;
     let intersecting;
+    let height, width;
+    $:top = 16/height;
+
+    $: smallScreen = width < 768; 
 
 </script>
-
+<svelte:window bind:innerHeight={height} bind:innerWidth={width}/>
 <IntersectionObserver {element} bind:intersecting threshold=.5>
     {#if size === 'small'}
     <section class='{section} interview {intersecting ? 'visible' : 'invisible'}' {id} bind:this={element}>
@@ -32,7 +36,7 @@
         />
     </section>
     {:else}
-    <Scroller bind:index bind:offset threshold=.3>
+    <Scroller bind:index bind:offset threshold=.3 top={smallScreen ? top : 0}>
             <div class="not-interactive" slot="foreground" {id} bind:this={element}>
                 <section class="not-interactive long-text col-text"><p class="not-interactive">&ldquo;<em>{header}</em>&rdquo;</p></section>
             </div>
