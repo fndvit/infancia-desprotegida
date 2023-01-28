@@ -1,5 +1,3 @@
-#### Read in [English](https://github.com/fndvit/infancia-desprotegida/blob/main/README.md#llegeix-en-català)
-
 
 # Infància (des)protegida
 
