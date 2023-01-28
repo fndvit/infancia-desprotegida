@@ -1,5 +1,3 @@
-#### Read in [English](https://github.com/fndvit/infancia-desprotegida/blob/main/README.md#llegeix-en-català)
-
 
 # Infància (des)protegida
 
@@ -30,7 +28,7 @@ Totes les fonts consultades coincideixen en la complexitat de trobar dades sobre
 
 Hem analitzat dades dels Mossos d'Esquadra, de la Direcció General d'Atenció a la Infància i Adolescència (DGAIA), de la Conselleria d'Igualtat, del departament de Salut, de l’Institut Català de les Dones i de múltiples enquestes. Les comparacions temporals de la darrera dècada (2011-21) mostren un increment sostingut de casos, tant de denúncies com de víctimes. Les dades del gràfic circular d'infants són de l'any 2021 — el 2020 va ser un any excepcional perquè la recollida de dades es va paralitzar a causa de la Covid-19-. Confiem que ajudi a entendre la urgència de dotar de recursos i millorar la coordinació els serveis públics, per detectar, actuar i prevenir nous casos. 
 
-El gràfic conclou amb l'estimació de més de 87 mil infants i adolescents a Catalunya pateixen maltractaments físics i/o abusos sexuals. La base d'aquesta xifra està en tres documents: 1) La tesis doctoral:["Menores testigos de violencia entre sus progenitores: repercusiones a nivel psicoemocional"](https://violenciagenero.igualdad.gob.es/va/violenciaEnCifras/estudios/Tesis/estudios/Tesis5_Menores_Testigos_Violencia.htm), elaborada per l'experta en violència de gènere i psicologia infantil Sandra Carracedo Cortiñas. 2) L'Informe sobre l’Estat dels Serveis Socials a Catalunya (2020) i 3) La [macroenquesta de violència de gènere (2019)](https://violenciagenero.igualdad.gob.es/violenciaEnCifras/macroencuesta2015/Macroencuesta2019/home.htm) (2019), elaborada pel Ministeri d'Igualtat del govern espnayol. 
+El gràfic conclou amb l'estimació de més de 87 mil infants i adolescents a Catalunya pateixen maltractaments físics i/o abusos sexuals. La base d'aquesta xifra està en tres documents: 1) La tesis doctoral:["Menores testigos de violencia entre sus progenitores: repercusiones a nivel psicoemocional"](https://violenciagenero.igualdad.gob.es/va/violenciaEnCifras/estudios/Tesis/estudios/Tesis5_Menores_Testigos_Violencia.htm), elaborada per l'experta en violència de gènere i psicologia infantil Sandra Carracedo Cortiñas. 2) L'[Informe sobre l’Estat dels Serveis Socials a Catalunya](https://dretssocials.gencat.cat/web/.content/03ambits_tematics/15serveissocials/sistema_catala_serveis_socials/documents/informe_estat_serveis_socials/Informe-sobre-lestat-dels-serveis-socials-2020.pdf) (2020) i 3) La [macroenquesta de violència de gènere (2019)](https://violenciagenero.igualdad.gob.es/violenciaEnCifras/macroencuesta2015/Macroencuesta2019/home.htm) (2019), elaborada pel Ministeri d'Igualtat del govern espnayol. 
 Ens hagués agradat comptar amb les conclusions de l'Enquesta de Violència Masclista del Departament d'Interior actualitzada (2019). Però després d'haver-la sol·licitat diverses vegades, la Generealitat encara té un deute pendent perquè només es pot consultar la del 2016.  
 
 ## Entrevistes
@@ -51,43 +49,16 @@ Amb càmera de vídeo vam entrevistar a nou responsables de l'administració cat
 
 L'objectiu d'aquestes entrevistes es que donessin respostes a les preguntes que es fan les víctimes, o els familiars més propers sobre la normativa, protocols i incompliment de la regulació actual. 
 
-## Dades i documents
-Podeu trobar tots aquests **documents** i **dades netes** a les carpetes corresponents.
-
-## Sobre el disseny 😎  
-
-tktktke
-
 ## L'equip 😍
-
-Karma Peiró és una periodista i docent catalana especialitzada en internet i el periodisme de dades. Va ser directora de Nació Digital des del juliol de 2015 fins a l'abril de 2018. Abans va ocupar càrrecs de responsabilitat a la revista Web, en.red.ando, La Vanguardia Digital i TV3.
-
-Francina Cortés és TKTKTKTK
-
-Rocío Minvielle és una documentalista audiovisual, productora, activista feminista i part del col·lectiu insurRECtas.
 
 Xaquín G.V. és un periodista de dades i editor visual gallec. Entre 2014 i 2017, va dirigir l'equip de Visuals de The Guardian a Londres. Abans va treballar a National Geographic, The New York Times, Newsweek i El Mundo (Espanya).
 
+Francina Cortés és il·lustradora infografista senior i dissenyadora gràfica a Barcelona. Durant 30 anys va treballar per a El Periódico de Catalunya com a il·lustradora. Durant la seva trajectòria ha estat premiada amb nombrosos premis internacionals del disseny en la comunicació.
+
+Rocío Minvielle és documentalista audiovisual, productora de eventos y realizadora integral de contenidos. Activista feminista i part del col·lectiu insurRECtas, que le ha llevado a realizar documentales dedicados a diferentes colectivos femeninos.
+
+Karma Peiró és una periodista i docent catalana especialitzada en internet i el periodisme de dades. Va ser directora de Nació Digital des del juliol de 2015 fins a l'abril de 2018. Abans va ocupar càrrecs de responsabilitat a la revista Web, en.red.ando, La Vanguardia Digital i TV3.
+
 ---
-
-#### Llegueix en [català](https://github.com/fndvit/infancia-desprotegida/blob/main/README.md/#read-in-English) 
-
-## Methodology
-  
-## Data and documents
-
-## About the design 😎  
-## The team 😍
-
-Karma Peiró is a data journalist and instructor from Catalunya. She was the editor in chief at Nació Digital between 2015 and 2018. Before that, she worked and lead teams at Web Magazine, en.red.ando, Catalunya Ràdio, La Vanguardia Digital, and TV3.
-
-Francina Cortés
-
-
-Rocío Minvielle is a documentary filmmaker, producer, and feminist activist. She’s a member of the insurRECtas collective.
-
-
-Xaquín G.V. is an interactive, data and visual journalist from Galicia. Between 2014 and 2017, he led the Visuals desk at The Guardian in London. Before that, he worked at National Geographic, The New York Times, Newsweek and El Mundo (Spain).
-
 
 
