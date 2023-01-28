@@ -54,40 +54,15 @@ L'objectiu d'aquestes entrevistes es que donessin respostes a les preguntes que 
 ## Dades i documents
 Podeu trobar tots aquests **documents** i **dades netes** a les carpetes corresponents.
 
-## Sobre el disseny 😎  
-
-tktktke
-
 ## L'equip 😍
-
 Karma Peiró és una periodista i docent catalana especialitzada en internet i el periodisme de dades. Va ser directora de Nació Digital des del juliol de 2015 fins a l'abril de 2018. Abans va ocupar càrrecs de responsabilitat a la revista Web, en.red.ando, La Vanguardia Digital i TV3.
 
-Francina Cortés és TKTKTKTK
+Francina Cortés és il·lustradora infografista senior i dissenyadora gràfica a Barcelona. Durant 30 anys va treballar per a El Periódico de Catalunya com a il·lustradora. Durant la seva trajectòria ha estat premiada amb nombrosos premis internacionals del disseny en la comunicació.
 
-Rocío Minvielle és una documentalista audiovisual, productora, activista feminista i part del col·lectiu insurRECtas.
+Rocío Minvielle és documentalista audiovisual, productora de eventos y realizadora integral de contenidos. Activista feminista i part del col·lectiu insurRECtas, que le ha llevado a realizar documentales dedicados a diferentes colectivos femeninos.
 
 Xaquín G.V. és un periodista de dades i editor visual gallec. Entre 2014 i 2017, va dirigir l'equip de Visuals de The Guardian a Londres. Abans va treballar a National Geographic, The New York Times, Newsweek i El Mundo (Espanya).
 
 ---
-
-#### Llegueix en [català](https://github.com/fndvit/infancia-desprotegida/blob/main/README.md/#read-in-English) 
-
-## Methodology
-  
-## Data and documents
-
-## About the design 😎  
-## The team 😍
-
-Karma Peiró is a data journalist and instructor from Catalunya. She was the editor in chief at Nació Digital between 2015 and 2018. Before that, she worked and lead teams at Web Magazine, en.red.ando, Catalunya Ràdio, La Vanguardia Digital, and TV3.
-
-Francina Cortés
-
-
-Rocío Minvielle is a documentary filmmaker, producer, and feminist activist. She’s a member of the insurRECtas collective.
-
-
-Xaquín G.V. is an interactive, data and visual journalist from Galicia. Between 2014 and 2017, he led the Visuals desk at The Guardian in London. Before that, he worked at National Geographic, The New York Times, Newsweek and El Mundo (Spain).
-
 
 
