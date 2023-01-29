@@ -17156,7 +17156,7 @@ var app = (function () {
     				p: "Casos tutelats per la DGAIA a finals de 2021"
     			},
     			{
-    				data: "87338",
+    				data: "87000",
     				range: "20",
     				head: "Slide head",
     				p: "Infants i adolescents maltractats a Catalunya"
@@ -17459,7 +17459,7 @@ var app = (function () {
     		type: "text",
     		text: [
     			{
-    				p: "A les escoles hi ha mancances per fer la detecció i atenció. <b>Sílvia Viladrich</b> és educadora en un institut de secundària d'alta complexitat. \"El protocol d'Ensenyament que s’activa a les escoles per a mi és burocràtic, amb poc acompanyament i menys suport a la víctima\", es queixa. \"Tens a la noia o noi que s'ha atrevit a parlar, a denunciar, amb una angoixa que no t'ho pots imaginar. I què fas? Quan verbalitza els fets violents s’activen els serveis externs però aquests estan col·lapsats i les actuacions s’allarguen en el temps. El noi o la noia torna a casa amb l'agressor/a sense rebre cap suport psicològic. L'endemà s'incorpora a la mateixa dinàmica que la resta dels seus companys/es. Us imagineu la por, l’angoixa, la inseguretat i la solitud que està patint aquest infant? La víctima ha confiat en nosaltres, els adults. Quin tipus d'acompanyament, de protecció i de suport li ofereix el sistema? Molt més recursos, transparència i coordinacions, si us plau!”, reclama."
+    				p: "A les escoles hi ha mancances per fer la detecció i atenció. <b>Sílvia Viladrich</b> és educadora en un institut de secundària d'alta complexitat. \"El protocol d'Ensenyament que s’activa a les escoles per a mi és burocràtic, amb poc acompanyament i menys suport a la víctima\", es queixa. \"Tens a la noia o noi que s'ha atrevit a parlar, a denunciar, amb una angoixa que no t'ho pots imaginar. I què fas? Quan verbalitza els fets violents s’activen els serveis externs però aquests estan col·lapsats i les actuacions s’allarguen en el temps. El noi o la noia torna a casa amb l'agressor/a sense rebre cap suport psicològic. L'endemà s'incorpora a la mateixa dinàmica que la resta dels seus companys/es. Us imagineu la por, l’angoixa, la inseguretat i la solitud que està patint aquest infant? La víctima ha confiat en nosaltres, els adults. Quin tipus d'acompanyament, de protecció i de suport li ofereix el sistema? Molt més recursos, transparència i coordinació, si us plau!”, reclama."
     			}
     		]
     	},
