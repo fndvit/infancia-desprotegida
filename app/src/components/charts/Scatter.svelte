@@ -1,6 +1,5 @@
 <script>
   import { Canvas } from "svelte-canvas";
-  import { Delaunay } from "d3-delaunay";
   import MiniVideo from "./MiniVideo.svelte";
 
   export let data;

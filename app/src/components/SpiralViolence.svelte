@@ -29,14 +29,12 @@
   });
 
 </script>
-
+<svelte:window bind:innerHeight={height} bind:innerWidth={width} />
 <div class="graphic-wrapper">
   <Scroller bind:progress>
     <div
       class="graphic"
       slot="background"
-      bind:clientHeight={height}
-      bind:clientWidth={width}
     >
         <Scatter {width} {height} {data} />
     </div>
