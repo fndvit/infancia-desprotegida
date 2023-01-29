@@ -23,8 +23,8 @@ La lectura de nombrosa documentació sobre la violència als infants (Informes, 
 
 Totes les fonts consultades coincideixen en la complexitat de trobar dades sobre la violència a menors (física i sexual) a Catalunya. La detecció dels casos reals de maltractament infantil és complexa i es desconeix la prevalença real. 
 
-* Segons l'organització Save the Children només es notifiquen a la policia o jutjats [1 de cada 10 abusos sexuals a menors!](https://www.savethechildren.es/sites/default/files/imce/docs/sota-el-mateix-sostre-web-doble.pdf) I 7 de cada 10 casos denunciats, no arriben a judici per manca de proves.
-* D'altra banda, les poques dades existents s'agafen amb criteris diferents pels serveis assistencials. L’[Informe sobre l’Estat dels Serveis Socials a Catalunya (2020)](https://dretssocials.gencat.cat/web/.content/03ambits_tematics/15serveissocials/sistema_catala_serveis_socials/documents/informe_estat_serveis_socials/Informe-sobre-lestat-dels-serveis-socials-2020.pdf) destaca que: “Les dades disponibles es basen en població detectada (registrada en expedients dels serveis socials i en denúncies policials) i, per tant, subestimen el nombre de casos. A l’Estat espanyol, la prevalença se situaria entorn del 15%. A Catalunya, la incidència del maltractament a infants i adolescents oscil·la entre un **5,4%** i un **18%**. L’interval és ampli degut a que s’utilitzen criteris diferents en la conceptualització i estimacions”.
+* Segons l'organització Save the Children només es notifiquen a la policia o jutjats [1 de cada 10 abusos sexuals a menors!](https://www.savethechildren.es/sites/default/files/imce/docs/sota-el-mateix-sostre-web-doble.pdf). I 7 de cada 10 casos denunciats, no arriben a judici per manca de proves.
+* D'altra banda, les poques dades existents s'agafen amb criteris diferents pels serveis assistencials. L’[Informe sobre l’Estat dels Serveis Socials a Catalunya (2020)](https://dretssocials.gencat.cat/web/.content/03ambits_tematics/15serveissocials/sistema_catala_serveis_socials/documents/informe_estat_serveis_socials/Informe-sobre-lestat-dels-serveis-socials-2020.pdf) destaca que: “Les dades disponibles es basen en població detectada (registrada en expedients dels serveis socials i en denúncies policials) i, per tant, subestimen el nombre de casos. A l’Estat espanyol, la prevalença se situaria entorn del 15%. A Catalunya, la incidència del maltractament a infants i adolescents oscil·la entre un 5,4% i un 18%. L’interval és ampli degut a que s’utilitzen criteris diferents en la conceptualització i estimacions”.
 
 Hem analitzat dades dels Mossos d'Esquadra, de la Direcció General d'Atenció a la Infància i Adolescència (DGAIA), de la Conselleria d'Igualtat, del departament de Salut, de l’Institut Català de les Dones i de múltiples enquestes. Les comparacions temporals de la darrera dècada (2011-21) mostren un increment sostingut de casos, tant de denúncies com de víctimes. Les dades del gràfic circular d'infants són de l'any 2021 — el 2020 va ser un any excepcional perquè la recollida de dades es va paralitzar a causa de la Covid-19-. Confiem que ajudi a entendre la urgència de dotar de recursos i millorar la coordinació els serveis públics, per detectar, actuar i prevenir nous casos. 
 
@@ -33,31 +33,32 @@ Ens hagués agradat comptar amb les conclusions de l'Enquesta de Violència Masc
 
 ## Entrevistes
 
-Agraïm moltíssim el relat del nen Marc, així com el de Lola i Alba (tots tres noms ficticis) per la valentia d'explicar els seus inferns.  
+Agraïm moltíssim el relat del **nen Marc**, així com el de la jove **Lola** i el de la **mare Alba** (tots tres noms ficticis) per la valentia d'explicar els seus inferns.  
 
 Hem realitzat més d'una trentena d'entrevistes a professionals dedicats a atendre a menors i adolescents que són abusats sexualment o maltractats psicològica i físicament, experts que treballen en serveis assistencials: serveis d'atenció sanitària a infants i adolescents, cases d’acollida, Serveis d’Intervenció Especialitzada (SIEs), personal dels Equips d'Atenció a la Infància i Adolescència (EAIAs), centres de menors i serveis socials i personal de serveis judicials públics que van donar-nos context. Però la majoria ens va demanar l'anonimat per temor a perdre la feina o tenir repercursions en el seu entorn laboral. 
 
 Amb càmera de vídeo vam entrevistar a nou responsables de l'administració catalana: 
-* la consellera del Departament d'Igualtat i Feminismes, Tània Verge i la DG per a l'eradicació de les violències masclistes, Laia Rosich, 
-* la directora de la Direcció General d'Atenció a la Infància i Adolescència (DGAIA), Ester Cabanes;
-* l'adjunta del Síndic de Greuges per a la Defensa dels Drets dels Infants i Adolescents, Maria Jesús Larios;
-* un sergent de la Unitat dels Menors dels Mossos d'Esquadra, Sergi Torras; 
-* la directora de la Unitat Funcional d'Atenció als Abusos Sexuals a Menors (UFAM) de l'Hospital St. Joan de Déu, Marta Simo; 
-* la DG de la Unitat de Suport a l'Alumnat (USAV) del Departament d'Educació, Rut Ribas; 
-* l'advocada penalista dedicada als casos d'abusos a infants i adolescents, Carla Vall; 
-* la magistrada especialista en violència masclista, Lucía Avilés.
+* la consellera del Departament d'Igualtat i Feminismes, **Tània Verge 
+* la DG per a l'eradicació de les violències masclistes, **Laia Rosich, 
+* la directora de la Direcció General d'Atenció a la Infància i Adolescència (DGAIA), **Ester Cabanes;
+* l'adjunta del Síndic de Greuges per a la Defensa dels Drets dels Infants i Adolescents, **Maria Jesús Larios;
+* un sergent de la Unitat dels Menors dels Mossos d'Esquadra, **Sergi Torras; 
+* la directora de la Unitat Funcional d'Atenció als Abusos Sexuals a Menors (UFAM) de l'Hospital St. Joan de Déu, **Marta Simo; 
+* la DG de la Unitat de Suport a l'Alumnat (USAV) del Departament d'Educació, **Rut Ribas; 
+* l'advocada penalista dedicada als casos d'abusos a infants i adolescents, **Carla Vall; 
+* la magistrada especialista en violència masclista, **Lucía Avilés**.
 
-L'objectiu d'aquestes entrevistes es que donessin respostes a les preguntes que es fan les víctimes, o els familiars més propers sobre la normativa, protocols i incompliment de la regulació actual. 
+L'objectiu d'aquestes entrevistes es que donin respostes a les preguntes que es fan les víctimes, o els familiars més propers sobre la normativa, protocols, incompliment de la regulació actual, així com sobre la falta de serveis, recursos i les llistes d'espera eternes. 
 
 ## L'equip 😍
 
-Xaquín G.V. és un periodista de dades i editor visual gallec. Entre 2014 i 2017, va dirigir l'equip de Visuals de The Guardian a Londres. Abans va treballar a National Geographic, The New York Times, Newsweek i El Mundo (Espanya).
+**[Xaquín G.V.](http://xocas.com/)** és un periodista de dades i editor visual gallec. Entre 2014 i 2017, va dirigir l'equip de Visuals de The Guardian a Londres. Abans va treballar a National Geographic, The New York Times, Newsweek i El Mundo (Espanya).
 
-Francina Cortés és il·lustradora infografista senior i dissenyadora gràfica a Barcelona. Durant 30 anys va treballar per a El Periódico de Catalunya com a il·lustradora. Durant la seva trajectòria ha estat premiada amb nombrosos premis internacionals del disseny en la comunicació.
+**[Francina Cortés](https://www.francinacortes.com/)** és il·lustradora infografista senior i dissenyadora gràfica a Barcelona. Durant 30 anys va treballar per a El Periódico de Catalunya com a infografista i il·lustradora. Durant la seva trajectòria ha estat premiada amb nombrosos premis internacionals del disseny en la comunicació.
 
-Rocío Minvielle és documentalista audiovisual, productora de eventos y realizadora integral de contenidos. Activista feminista i part del col·lectiu insurRECtas, que le ha llevado a realizar documentales dedicados a diferentes colectivos femeninos.
+**[Rocío Minvielle](https://www.linkedin.com/in/eventos-produccion-audiovisual-roc%C3%ADo-minvielle-/?original_referer=http%3A%2F%2Finfanciadesprotegida.com%2F)** és documentalista audiovisual, productora de eventos y realizadora integral de contenidos. Activista feminista i part del col·lectiu insurRECtas, que le ha llevado a realizar documentales dedicados a diferentes colectivos femeninos.
 
-Karma Peiró és una periodista i docent catalana especialitzada en internet i el periodisme de dades. Va ser directora de Nació Digital des del juliol de 2015 fins a l'abril de 2018. Abans va ocupar càrrecs de responsabilitat a la revista Web, en.red.ando, La Vanguardia Digital i TV3.
+**[Karma Peiró](http://karmapeiro.cat/)** és una periodista i docent catalana especialitzada en internet i el periodisme de dades. Va ser directora de Nació Digital des del juliol de 2015 fins a l'abril de 2018. Abans va ocupar càrrecs de responsabilitat a la revista Web, en.red.ando, La Vanguardia Digital i TV3.
 
 ---
 
