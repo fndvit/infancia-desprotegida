@@ -16075,7 +16075,7 @@ var app = (function () {
     	return child_ctx;
     }
 
-    // (19:0) {#each list as li}
+    // (16:0) {#each list as li}
     function create_each_block$1(ctx) {
     	let li;
     	let raw_value = /*li*/ ctx[3] + "";
@@ -16083,7 +16083,7 @@ var app = (function () {
     	const block = {
     		c: function create() {
     			li = element("li");
-    			add_location(li, file$2, 19, 0, 368);
+    			add_location(li, file$2, 16, 0, 296);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, li, anchor);
@@ -16100,7 +16100,7 @@ var app = (function () {
     		block,
     		id: create_each_block$1.name,
     		type: "each",
-    		source: "(19:0) {#each list as li}",
+    		source: "(16:0) {#each list as li}",
     		ctx
     	});
 
@@ -16108,9 +16108,7 @@ var app = (function () {
     }
 
     function create_fragment$2(ctx) {
-    	let div1;
     	let section;
-    	let div0;
     	let h2;
     	let t0;
     	let text_1;
@@ -16133,9 +16131,7 @@ var app = (function () {
 
     	const block = {
     		c: function create() {
-    			div1 = element("div");
     			section = element("section");
-    			div0 = element("div");
     			h2 = element("h2");
     			t0 = space();
     			create_component(text_1.$$.fragment);
@@ -16146,25 +16142,19 @@ var app = (function () {
     				each_blocks[i].c();
     			}
 
-    			attr_dev(h2, "class", "col-text svelte-t67fkx");
-    			add_location(h2, file$2, 10, 36, 225);
-    			attr_dev(div0, "class", "header-wrapper svelte-t67fkx");
-    			add_location(div0, file$2, 10, 8, 197);
-    			attr_dev(section, "class", "full chapter svelte-t67fkx");
-    			add_location(section, file$2, 9, 4, 158);
-    			attr_dev(div1, "class", "chapter-wrapper svelte-t67fkx");
-    			add_location(div1, file$2, 8, 0, 124);
+    			attr_dev(h2, "class", "col-text svelte-fkexwn");
+    			add_location(h2, file$2, 8, 8, 166);
+    			attr_dev(section, "class", "full chapter svelte-fkexwn");
+    			add_location(section, file$2, 7, 4, 127);
     			attr_dev(ul, "class", "col-text");
-    			add_location(ul, file$2, 17, 0, 327);
+    			add_location(ul, file$2, 14, 0, 255);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
     		m: function mount(target, anchor) {
-    			insert_dev(target, div1, anchor);
-    			append_dev(div1, section);
-    			append_dev(section, div0);
-    			append_dev(div0, h2);
+    			insert_dev(target, section, anchor);
+    			append_dev(section, h2);
     			h2.innerHTML = /*header*/ ctx[1];
     			insert_dev(target, t0, anchor);
     			mount_component(text_1, target, anchor);
@@ -16216,7 +16206,7 @@ var app = (function () {
     			current = false;
     		},
     		d: function destroy(detaching) {
-    			if (detaching) detach_dev(div1);
+    			if (detaching) detach_dev(section);
     			if (detaching) detach_dev(t0);
     			destroy_component(text_1, detaching);
     			if (detaching) detach_dev(t1);

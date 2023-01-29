@@ -5,12 +5,9 @@
     export let list;
 
 </script>
-
-<div class='chapter-wrapper'>
     <section class='full chapter'>
-        <div class='header-wrapper'><h2 class='col-text'>{@html header}</h2></div>
+        <h2 class='col-text'>{@html header}</h2>
     </section>
-</div>
 <Text 
 {text}
 dropcap = false
@@ -25,16 +22,9 @@ dropcap = false
   h2 {
     font-size: 4rem;
   }
-  .header-wrapper {
-      position:absolute;
-      bottom:0;
-      width: 100%;
-  }
-  .chapter-wrapper {
-    height: 35vh;
-    padding-bottom:3rem;
-  }
   .full {
-    height: 35vh;
+    margin-top: 2rem;
+    padding-bottom:3rem;
+    height:auto;
   }
 </style>
